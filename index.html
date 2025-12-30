@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Premier League - Mini League Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏆 FPL Mini League Tracker</h1>
+            <p class="subtitle">Theo dõi và tính toán số tiền đóng góp</p>
+        </header>
+
+        <div id="userInfo" class="user-info hidden">
+            <div class="user-display">
+                <span id="currentEntryId"></span>
+                <div class="user-actions">
+                    <button id="showLeagues" class="btn btn-secondary" title="Quay lại danh sách League">📋 Danh sách League</button>
+                    <button id="changeUser" class="btn btn-secondary">🔄 Đổi User</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls" id="entryInputSection">
+            <div class="input-group">
+                <label for="entryId">User ID (Entry ID):</label>
+                <div>
+                    <input type="text" id="entryId" placeholder="Nhập Entry ID của bạn (số trong URL team của bạn)" value="232782">
+                    <button id="loadUser" class="btn btn-primary">Tải danh sách League</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="leagueSelector" class="league-selector hidden">
+            <h3>Chọn League</h3>
+            <div id="leagueList" class="league-list">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Classic League Info -->
+        <div id="classicLeagueInfo" class="league-info hidden">
+            <div class="league-header">
+                <div class="league-header-main">
+                    <h2 id="leagueName"></h2>
+                    <div class="gw-info-inline">
+                        <span class="gw-range-label">📅</span>
+                        <span id="gwRangeInfo" class="gw-range-value">GW1 - GW38</span>
+                        <span id="remainingGWs" class="gw-remaining">(Đang tải...)</span>
+                    </div>
+                </div>
+                <div class="league-actions">
+                    <select id="gameweekSelect" class="gameweek-select-compact">
+                        <option value="">-- Chọn tuần --</option>
+                    </select>
+                    <a href="settings.html" class="btn btn-settings" title="Cài đặt số tiền">⚙️</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- H2H League Info -->
+        <div id="h2hLeagueInfo" class="league-info hidden">
+            <!-- Will be populated by JavaScript -->
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p id="loadingText">Đang tải dữ liệu...</p>
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <p id="progressText" class="progress-text"></p>
+        </div>
+
+        <div id="error" class="error hidden"></div>
+
+        <div id="standings" class="standings hidden">
+            <h3>Bảng xếp hạng Gameweek <span id="currentGW"></span></h3>
+            <div class="table-container">
+                <table id="standingsTable">
+                    <thead>
+                        <tr>
+                            <th data-sort="rankByTotal">Hạng <span class="sort-icon"></span></th>
+                            <th data-sort="playerName">Người chơi <span class="sort-icon"></span></th>
+                            <th data-sort="gwPoints">Điểm GW <span class="sort-icon"></span></th>
+                            <th data-sort="totalPoints">Tổng điểm <span class="sort-icon"></span></th>
+                            <th data-sort="payment">Số tiền GW <span class="sort-icon"></span></th>
+                            <th data-sort="cumulativePayment">Tổng tiền đã đóng <span class="sort-icon"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="standingsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- H2H League Section (Separate from Classic) -->
+        <div id="h2hStandings" class="standings hidden">
+            <div id="h2hMatchesContainer">
+                <!-- H2H matches will be inserted here -->
+            </div>
+            <h3>Bảng xếp hạng H2H</h3>
+            <div class="table-container">
+                <table id="h2hStandingsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; color: white;">Hạng</th>
+                            <th style="color: white;">Người chơi</th>
+                            <th style="text-align: center; width: 80px; color: white;">Trận</th>
+                            <th style="text-align: center; width: 70px; color: white;">Thắng</th>
+                            <th style="text-align: center; width: 70px; color: white;">Hòa</th>
+                            <th style="text-align: center; width: 70px; color: white;">Thua</th>
+                            <th style="text-align: center; width: 90px; color: white;">Điểm cho</th>
+                            <th style="text-align: center; width: 100px; color: white;">Điểm chống</th>
+                            <th style="text-align: center; width: 90px; color: white;">Tổng điểm</th>
+                        </tr>
+                    </thead>
+                    <tbody id="h2hStandingsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="leagueSettings" class="league-settings-info hidden">
+            <div class="settings-info-grid">
+                <div class="settings-info-card highlight">
+                    <div class="settings-info-label">🏆 Giải Thưởng</div>
+                    <div class="awards-list" id="awardsList">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="summary" class="summary hidden">
+            <h3>📊 Tổng hợp tích lũy</h3>
+            <div class="summary-stats">
+                <div class="stat-card">
+                    <div class="stat-label">Tổng quỹ gameweek</div>
+                    <div class="stat-value" id="totalGWFund">0đ</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tổng quỹ cả giải</div>
+                    <div class="stat-value" id="totalLeagueFund">0đ</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Số người chơi</div>
+                    <div class="stat-value" id="totalPlayers">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
