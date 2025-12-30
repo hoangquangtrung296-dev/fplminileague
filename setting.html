@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cài đặt - FPL Mini League Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container settings-container">
+        <a href="#" id="backButton" class="back-link" title="Quay lại">←</a>
+        
+        <header>
+            <h1>⚙️ Cài đặt Mini League</h1>
+            <p class="subtitle">Cấu hình số tiền đóng góp, giải thưởng và thời gian tính</p>
+        </header>
+
+        <div class="info-box">
+            <p><strong>Hướng dẫn:</strong> Cấu hình các thông số cho mini league của bạn. Số lượng hạng sẽ tự động điều chỉnh theo số người chơi trong league.</p>
+        </div>
+
+        <form class="settings-form" id="settingsForm">
+            <!-- League Info -->
+            <div class="settings-section">
+                <h3>📊 Thông tin League</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="leagueName">Tên League:</label>
+                        <input type="text" id="leagueName" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="playerCount">Số người chơi:</label>
+                        <input type="number" id="playerCount" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GW Range -->
+            <div class="settings-section">
+                <h3>📅 Thời gian tính điểm</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="startGW">Gameweek bắt đầu:</label>
+                        <input type="number" id="startGW" min="1" max="38" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="endGW">Gameweek kết thúc:</label>
+                        <input type="number" id="endGW" min="1" max="38" value="38" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Settings -->
+            <div class="settings-section">
+                <h3>💰 Cài đặt số tiền đóng</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autoIncrement">
+                        Tự động tăng số tiền (bước nhảy cố định)
+                    </label>
+                </div>
+                
+                <div class="form-group" id="incrementGroup" style="display: none;">
+                    <label for="incrementAmount">Bước nhảy (VND):</label>
+                    <input type="number" id="incrementAmount" min="0" step="1000" value="5000" placeholder="Ví dụ: 5000">
+                    <button type="button" id="applyIncrement" class="btn btn-secondary" style="margin-top: 10px;">
+                        Áp dụng bước nhảy
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label>Số tiền theo từng hạng (VND):</label>
+                    <div class="rank-config" id="rankConfig">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prize Money -->
+            <div class="settings-section">
+                <h3>🏆 Giải thưởng</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="prize1st">Giải Nhất (VND):</label>
+                        <input type="text" id="prize1st" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="prize2nd">Giải Nhì (VND):</label>
+                        <input type="text" id="prize2nd" placeholder="0" value="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="prize3rd">Giải Ba (VND):</label>
+                        <input type="text" id="prize3rd" placeholder="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="prizeChampion">Cúp Vô Địch (VND):</label>
+                        <input type="text" id="prizeChampion" placeholder="0" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- H2H Prize -->
+            <div class="settings-section">
+                <h3>⚔️ Giải Head-to-Head</h3>
+                <p class="section-description">Liên kết giải H2H và trao giải thưởng cho người vô địch H2H.</p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="h2hLeague">Chọn League H2H:</label>
+                        <select id="h2hLeague">
+                            <option value="">-- Không chọn --</option>
+                            <!-- Will be populated by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="prizeH2H">Tiền thưởng H2H (VND):</label>
+                        <input type="text" id="prizeH2H" placeholder="0" value="0">
+                    </div>
+                </div>
+                <div id="h2hLeagueInfo" class="info-box" style="display: none; margin-top: 15px;">
+                    <p id="h2hLeagueDetails"></p>
+                </div>
+            </div>
+
+            <!-- Stage Prizes -->
+            <div class="settings-section">
+                <h3>🏁 Giải Chặng Đua</h3>
+                <p class="section-description">Giải thưởng cho người có điểm cao nhất trong 1 tuần bất kỳ trong khoảng từ GW bắt đầu đến GW kết thúc của mỗi chặng.</p>
+                
+                <div id="stagesList" class="stages-list">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+                
+                <button type="button" id="addStageBtn" class="btn btn-secondary">
+                    ➕ Thêm Chặng Đua
+                </button>
+            </div>
+
+            <!-- Summary -->
+            <div class="settings-section summary-section">
+                <h3>📊 Tổng kết</h3>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="summary-label">Tổng tiền mỗi GW:</div>
+                        <div class="summary-value" id="totalPerGW">0đ</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Tổng số GW:</div>
+                        <div class="summary-value" id="totalGWs">0</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Tổng tiền cả giải:</div>
+                        <div class="summary-value" id="totalLeagueMoney">0đ</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Tổng giải chặng đua:</div>
+                        <div class="summary-value" id="totalStagePrize">0đ</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Tổng tiền thưởng:</div>
+                        <div class="summary-value" id="totalPrizeMoney">0đ</div>
+                    </div>
+                    <div class="summary-item highlight">
+                        <div class="summary-label">Tiền liên hoan:</div>
+                        <div class="summary-value" id="celebrationMoney">0đ</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">💾 Lưu cài đặt</button>
+                <button type="button" id="resetBtn" class="btn btn-secondary">🔄 Đặt lại mặc định</button>
+            </div>
+        </form>
+
+        <div id="saveMessage" class="info-box" style="display: none; background: #d1fae5; border-color: #10b981;">
+            <p>✅ Đã lưu cài đặt thành công!</p>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+</html>
