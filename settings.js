@@ -18,6 +18,8 @@ function loadSettings(leagueId = null) {
             prize3rd: 0,
             prizeChampion: 0,
             prizeH2H: 0,
+            prizeEncouragement: 0,
+            encouragementName: '',
             h2hLeagueId: null,
             h2hLeagueName: '',
             stages: []
@@ -40,6 +42,8 @@ function loadSettings(leagueId = null) {
         prize3rd: 0,
         prizeChampion: 0,
         prizeH2H: 0,
+        prizeEncouragement: 0,
+        encouragementName: '',
         h2hLeagueId: null,
         h2hLeagueName: '',
         stages: [] // Array of stage objects: {startGW, endGW, prize, name}
@@ -204,6 +208,8 @@ function getFormSettings() {
         prize3rd: parseFormattedNumber(document.getElementById('prize3rd').value),
         prizeChampion: parseFormattedNumber(document.getElementById('prizeChampion').value),
         prizeH2H: parseFormattedNumber(document.getElementById('prizeH2H').value),
+        prizeEncouragement: parseFormattedNumber(document.getElementById('prizeEncouragement').value),
+        encouragementName: document.getElementById('encouragementName').value || '',
         h2hLeagueId: document.getElementById('h2hLeague').value || null,
         h2hLeagueName: document.getElementById('h2hLeague').selectedOptions[0]?.text || '',
         stages
@@ -237,6 +243,7 @@ function updateSummary() {
     const prize3rd = parseFormattedNumber(document.getElementById('prize3rd').value);
     const prizeChampion = parseFormattedNumber(document.getElementById('prizeChampion').value);
     const prizeH2H = parseFormattedNumber(document.getElementById('prizeH2H').value);
+    const prizeEncouragement = parseFormattedNumber(document.getElementById('prizeEncouragement').value);
     
     // Calculate total stage prizes
     let totalStagePrize = 0;
@@ -246,7 +253,7 @@ function updateSummary() {
         totalStagePrize += prize;
     });
     
-    const totalPrizeMoney = prize1st + prize2nd + prize3rd + prizeChampion + prizeH2H + totalStagePrize;
+    const totalPrizeMoney = prize1st + prize2nd + prize3rd + prizeChampion + prizeH2H + prizeEncouragement + totalStagePrize;
     
     // Calculate celebration money
     const celebrationMoney = totalLeagueMoney - totalPrizeMoney;
@@ -481,6 +488,8 @@ function initializePage() {
     document.getElementById('prize3rd').value = formatNumber(settings.prize3rd || 0);
     document.getElementById('prizeChampion').value = formatNumber(settings.prizeChampion || 0);
     document.getElementById('prizeH2H').value = formatNumber(settings.prizeH2H || 0);
+    document.getElementById('prizeEncouragement').value = formatNumber(settings.prizeEncouragement || 0);
+    document.getElementById('encouragementName').value = settings.encouragementName || '';
     
     // Add currency formatting to prize inputs
     addCurrencyFormatting('prize1st');
@@ -488,6 +497,7 @@ function initializePage() {
     addCurrencyFormatting('prize3rd');
     addCurrencyFormatting('prizeChampion');
     addCurrencyFormatting('prizeH2H');
+    addCurrencyFormatting('prizeEncouragement');
     
     // Load H2H leagues from localStorage
     loadH2HLeagues();
@@ -515,6 +525,7 @@ function initializePage() {
     document.getElementById('prize3rd').addEventListener('input', updateSummary);
     document.getElementById('prizeChampion').addEventListener('input', updateSummary);
     document.getElementById('prizeH2H').addEventListener('input', updateSummary);
+    document.getElementById('prizeEncouragement').addEventListener('input', updateSummary);
     
     // Add listener for H2H league selection
     document.getElementById('h2hLeague').addEventListener('change', updateH2HLeagueInfo);
@@ -568,6 +579,8 @@ document.getElementById('resetBtn').addEventListener('click', () => {
             prize3rd: 0,
             prizeChampion: 0,
             prizeH2H: 0,
+            prizeEncouragement: 0,
+            encouragementName: '',
             h2hLeagueId: null,
             h2hLeagueName: '',
             stages: []
@@ -583,6 +596,8 @@ document.getElementById('resetBtn').addEventListener('click', () => {
         document.getElementById('prize3rd').value = formatNumber(0);
         document.getElementById('prizeChampion').value = formatNumber(0);
         document.getElementById('prizeH2H').value = formatNumber(0);
+        document.getElementById('prizeEncouragement').value = formatNumber(0);
+        document.getElementById('encouragementName').value = '';
         document.getElementById('h2hLeague').value = '';
         document.getElementById('h2hLeagueInfo').style.display = 'none';
         

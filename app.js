@@ -122,7 +122,19 @@ function loadSettings(leagueId = null) {
         // No league ID, return default settings
         return {
             maxRanks: 20,
-            rankPayments: generateDefaultPayments(20)
+            rankPayments: generateDefaultPayments(20),
+            startGW: 1,
+            endGW: 38,
+            prize1st: 0,
+            prize2nd: 0,
+            prize3rd: 0,
+            prizeChampion: 0,
+            prizeH2H: 0,
+            prizeEncouragement: 0,
+            encouragementName: '',
+            h2hLeagueId: null,
+            h2hLeagueName: '',
+            stages: []
         };
     }
     
@@ -133,7 +145,19 @@ function loadSettings(leagueId = null) {
     // Default settings
     return {
         maxRanks: 20,
-        rankPayments: generateDefaultPayments(20)
+        rankPayments: generateDefaultPayments(20),
+        startGW: 1,
+        endGW: 38,
+        prize1st: 0,
+        prize2nd: 0,
+        prize3rd: 0,
+        prizeChampion: 0,
+        prizeH2H: 0,
+        prizeEncouragement: 0,
+        encouragementName: '',
+        h2hLeagueId: null,
+        h2hLeagueName: '',
+        stages: []
     };
 }
 
@@ -1617,6 +1641,32 @@ async function displayLeagueSettings(currentGameweek, sortedData) {
                 `);
             }
         });
+    }
+    
+    // Encouragement Prize (for 4th place)
+    if (settings.prizeEncouragement > 0) {
+        const fourthPlace = byTotalPoints.length >= 4 ? byTotalPoints[3] : null;
+        const encouragementName = settings.encouragementName || 'Giải Khuyến Khích';
+        
+        secondaryAwardsHTML.push(`
+            <div class="award-item encouragement" style="border-color: #ec4899; background: linear-gradient(135deg, #fdf2f8, #fce7f3);">
+                <div class="award-icon">🎁</div>
+                <div class="award-info">
+                    <div class="award-title">${encouragementName}${provisionalText}</div>
+                    <div class="award-subtitle">Hạng 4</div>
+                    <div class="award-amount">${formatCurrency(settings.prizeEncouragement)}</div>
+                </div>
+                <div class="award-winner">
+                    ${fourthPlace ? `
+                        <div class="winner-info">
+                            <span class="winner-name">${fourthPlace.playerName}</span>
+                            <span class="winner-team">(${fourthPlace.entryName})</span>
+                        </div>
+                        <div class="winner-points">${fourthPlace.totalPoints} điểm</div>
+                    ` : '<div class="winner-tbd">Chưa xác định</div>'}
+                </div>
+            </div>
+        `);
     }
     
     // Build final HTML with sections
