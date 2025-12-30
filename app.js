@@ -2,6 +2,35 @@
 const API_BASE = 'https://fantasy.premierleague.com/api';
 const CORS_PROXY = 'https://corsproxy.io/?';
 
+// Helper to fetch with optional CORS proxy
+async function fetchWithProxy(endpoint, useProxy = true) {
+    // Try direct first (works when deployed to GitHub Pages or other HTTPS hosts)
+    try {
+        const directUrl = `${API_BASE}${endpoint}`;
+        const response = await fetch(directUrl);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (err) {
+        console.log('Direct fetch failed, trying with proxy...');
+    }
+    
+    // Fallback to proxy if direct fails
+    if (useProxy) {
+        try {
+            const proxyUrl = `${CORS_PROXY}${API_BASE}${endpoint}`;
+            const response = await fetch(proxyUrl);
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (err) {
+            console.error('Proxy fetch also failed:', err);
+        }
+    }
+    
+    throw new Error(`Failed to fetch: ${endpoint}`);
+}
+
 // App state
 let currentEntryId = null;
 let currentLeagueId = null;
@@ -145,14 +174,7 @@ function showError(message) {
 // Fetch data from FPL API
 async function fetchEntryData(entryId) {
     try {
-        const url = `${CORS_PROXY}${API_BASE}/entry/${entryId}/`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error('Không thể tải dữ liệu user. Vui lòng kiểm tra Entry ID.');
-        }
-        
-        const data = await response.json();
+        const data = await fetchWithProxy(`/entry/${entryId}/`);
         return data;
     } catch (error) {
         throw new Error(`Lỗi kết nối: ${error.message}`);
@@ -161,14 +183,7 @@ async function fetchEntryData(entryId) {
 
 async function fetchLeagueStandings(leagueId, page = 1) {
     try {
-        const url = `${CORS_PROXY}${API_BASE}/leagues-classic/${leagueId}/standings/?page_standings=${page}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error('Không thể tải dữ liệu league. Vui lòng kiểm tra League ID.');
-        }
-        
-        const data = await response.json();
+        const data = await fetchWithProxy(`/leagues-classic/${leagueId}/standings/?page_standings=${page}`);
         return data;
     } catch (error) {
         throw new Error(`Lỗi kết nối: ${error.message}`);
@@ -177,14 +192,7 @@ async function fetchLeagueStandings(leagueId, page = 1) {
 
 async function fetchH2HLeagueStandings(leagueId) {
     try {
-        const url = `${CORS_PROXY}${API_BASE}/leagues-h2h/${leagueId}/standings/`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error('Không thể tải dữ liệu H2H league.');
-        }
-        
-        const data = await response.json();
+        const data = await fetchWithProxy(`/leagues-h2h/${leagueId}/standings/`);
         return data;
     } catch (error) {
         console.error('Error fetching H2H league:', error);
@@ -194,38 +202,21 @@ async function fetchH2HLeagueStandings(leagueId) {
 
 async function fetchH2HMatches(leagueId, gameweek) {
     try {
-        // Try alternative endpoint structure
-        const url = `${CORS_PROXY}${API_BASE}/leagues-h2h-matches/league/${leagueId}/?event=${gameweek}&page=1`;
-        console.log('Fetching H2H matches from:', url);
-        
-        const response = await fetch(url);
-        
-        console.log('H2H matches response status:', response.status);
-        
-        if (!response.ok) {
-            console.error('Failed to fetch H2H matches. Status:', response.status);
-            // Return empty result instead of throwing error
-            return { results: [] };
-        }
-        
-        const data = await response.json();
-        console.log('H2H matches data structure:', data);
-        return data;
+        console.log(`Fetching H2H matches for league ${leagueId}, GW ${gameweek}`);
+        const data = await fetchWithProxy(`/leagues-h2h-matches/league/${leagueId}/?event=${gameweek}&page=1`);
+        return data || { results: [] };
     } catch (error) {
         console.error('Error fetching H2H matches:', error);
-        // Return empty result instead of null
         return { results: [] };
     }
 }
 
 async function fetchBootstrapData() {
     try {
-        const url = `${CORS_PROXY}${API_BASE}/bootstrap-static/`;
-        const response = await fetch(url);
-        const data = await response.json();
-        return data;
+        return await fetchWithProxy('/bootstrap-static/');
     } catch (error) {
-        throw new Error('Không thể tải thông tin gameweek');
+        console.error('Error fetching bootstrap data:', error);
+        return null; // Return null instead of throwing
     }
 }
 
@@ -345,9 +336,7 @@ function setCachedPicks(entryId, gw, data) {
 
 async function fetchEntryHistory(entryId) {
     try {
-        const url = `${CORS_PROXY}${API_BASE}/entry/${entryId}/history/`;
-        const response = await fetch(url);
-        const data = await response.json();
+        const data = await fetchWithProxy(`/entry/${entryId}/history/`);
         return data;
     } catch (error) {
         console.error(`Lỗi khi lấy lịch sử entry ${entryId}:`, error);
@@ -365,12 +354,12 @@ async function fetchEntryPicks(entryId, gameweek, useCache = true) {
     }
     
     try {
-        const url = `${CORS_PROXY}${API_BASE}/entry/${entryId}/event/${gameweek}/picks/`;
-        const response = await fetch(url);
-        const data = await response.json();
+        const data = await fetchWithProxy(`/entry/${entryId}/event/${gameweek}/picks/`);
         
         // Cache the result
-        setCachedPicks(entryId, gameweek, data);
+        if (data) {
+            setCachedPicks(entryId, gameweek, data);
+        }
         return data;
     } catch (error) {
         console.error(`Lỗi khi lấy picks của entry ${entryId} GW${gameweek}:`, error);
@@ -390,9 +379,11 @@ async function fetchGameweekLive(gameweek, useCache = true) {
     }
     
     try {
-        const url = `${CORS_PROXY}${API_BASE}/event/${gameweek}/live/`;
-        const response = await fetch(url);
-        const data = await response.json();
+        const data = await fetchWithProxy(`/event/${gameweek}/live/`);
+        if (!data || !data.elements) {
+            return null;
+        }
+        
         const elements = data.elements;
         
         // Only cache essential player data to save space
@@ -429,6 +420,13 @@ async function fetchGameweekLive(gameweek, useCache = true) {
 async function initializeGameweekSelector() {
     try {
         const bootstrapData = await fetchBootstrapData();
+        
+        // Check if bootstrapData and events exist
+        if (!bootstrapData || !bootstrapData.events || !Array.isArray(bootstrapData.events)) {
+            console.error('Invalid bootstrap data');
+            return 1; // Return default GW 1
+        }
+        
         const gameweeks = bootstrapData.events;
         const currentGW = gameweeks.find(gw => gw.is_current);
         
@@ -619,6 +617,16 @@ async function displayH2HStandings(h2hData, leagueName, initialGameweek) {
     
     // Get bootstrap data for gameweek list
     const bootstrapData = await fetchBootstrapData();
+    
+    // Check if bootstrapData is valid
+    if (!bootstrapData || !bootstrapData.events || !Array.isArray(bootstrapData.events)) {
+        console.error('Invalid bootstrap data in H2H standings');
+        // Use fallback
+        const currentGWId = initialGameweek || 1;
+        displayH2HStandingsTable(standings, currentGWId);
+        return;
+    }
+    
     const gameweeks = bootstrapData.events;
     const currentGW = gameweeks.find(gw => gw.is_current);
     const currentGWId = currentGW ? currentGW.id : gameweeks[gameweeks.length - 1].id;
@@ -896,8 +904,16 @@ async function loadGameweekData(gameweek) {
     try {
         // Get bootstrap data to check which GWs are finished
         const bootstrapData = await fetchBootstrapData();
-        const currentGWInfo = bootstrapData.events.find(e => e.is_current);
-        const currentGWId = currentGWInfo ? currentGWInfo.id : gameweek;
+        
+        // Check if bootstrapData is valid
+        if (!bootstrapData || !bootstrapData.events || !Array.isArray(bootstrapData.events)) {
+            console.error('Invalid bootstrap data, using gameweek from parameter');
+            // Continue with the gameweek parameter as fallback
+            const currentGWId = gameweek;
+        } else {
+            const currentGWInfo = bootstrapData.events.find(e => e.is_current);
+            var currentGWId = currentGWInfo ? currentGWInfo.id : gameweek;
+        }
         
         // If we don't have full history yet, load all gameweeks data
         if (!allGameweeksData['fullHistory']) {
