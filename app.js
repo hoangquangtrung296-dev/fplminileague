@@ -290,6 +290,36 @@ async function fetchBootstrapData() {
     }
 }
 
+// Cache version - increment this when cache structure changes
+const CACHE_VERSION = 3; // v3: added gwTransfers field
+
+// Check and clear old cache if version changed
+function checkCacheVersion() {
+    const savedVersion = localStorage.getItem('fplCacheVersion');
+    if (savedVersion !== String(CACHE_VERSION)) {
+        console.log(`Cache version changed (${savedVersion} -> ${CACHE_VERSION}), clearing old cache...`);
+        clearAllGWCaches();
+        localStorage.setItem('fplCacheVersion', String(CACHE_VERSION));
+    }
+}
+
+// Clear all GW caches
+function clearAllGWCaches() {
+    try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('fplCache_gw_')) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log(`Đã xóa ${keysToRemove.length} cache GW cũ`);
+    } catch (error) {
+        console.error('Lỗi khi xóa cache:', error);
+    }
+}
+
 // Cache helper functions
 function clearOldestCaches(prefix) {
     try {
@@ -508,14 +538,18 @@ async function initializeGameweekSelector() {
         
         select.innerHTML = '<option value="">-- Chọn tuần --</option>';
         
+        // Only show gameweeks that have finished or are current (have data)
         gameweeks.forEach(gw => {
-            const option = document.createElement('option');
-            option.value = gw.id;
-            option.textContent = `GW ${gw.id}${gw.is_current ? ' (Hiện tại)' : ''}`;
-            if (gw.is_current) {
-                option.selected = true;
+            // Only add gameweeks that have started/finished or are current
+            if (gw.finished || gw.is_current || gw.data_checked) {
+                const option = document.createElement('option');
+                option.value = gw.id;
+                option.textContent = `GW ${gw.id}${gw.is_current ? ' (Hiện tại)' : ''}`;
+                if (gw.is_current) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
             }
-            select.appendChild(option);
         });
         
         return currentGW ? currentGW.id : gameweeks[gameweeks.length - 1].id;
@@ -932,12 +966,66 @@ async function loadLeague(leagueId) {
     try {
         // Fetch league standings
         const data = await fetchLeagueStandings(leagueId);
+        console.log('📊 Fetched league data:', data);
+        console.log('📊 standings object:', data?.standings);
+        console.log('📊 standings.results:', data?.standings?.results);
+        console.log('📊 standings.has_next:', data?.standings?.has_next);
+        console.log('📊 league.start_event:', data?.league?.start_event);
+        console.log('📊 new_entries.results:', data?.new_entries?.results);
+        
+        if (!data || !data.standings) {
+            showError('Không thể tải dữ liệu league. API có thể đang bận.');
+            return;
+        }
+        
+        // FPL API returns paginated results, need to fetch all pages
+        let allResults = [...(data.standings.results || [])];
+        let hasNext = data.standings.has_next;
+        let page = 1;
+        
+        while (hasNext) {
+            page++;
+            console.log(`📊 Fetching page ${page}...`);
+            const nextPageData = await fetchLeagueStandings(leagueId, page);
+            if (nextPageData && nextPageData.standings && nextPageData.standings.results) {
+                allResults = [...allResults, ...nextPageData.standings.results];
+                hasNext = nextPageData.standings.has_next;
+            } else {
+                hasNext = false;
+            }
+        }
+        
+        // If standings is empty but new_entries has data, use new_entries
+        // This happens for leagues that haven't started yet or just created
+        if (allResults.length === 0 && data.new_entries && data.new_entries.results && data.new_entries.results.length > 0) {
+            console.log('📊 Using new_entries as standings (league may not have started yet)');
+            allResults = data.new_entries.results.map(entry => ({
+                id: entry.entry,
+                entry: entry.entry,
+                entry_name: entry.entry_name,
+                player_name: `${entry.player_first_name} ${entry.player_last_name}`,
+                rank: 0,
+                last_rank: 0,
+                rank_sort: 0,
+                total: 0,
+                event_total: 0
+            }));
+        }
+        
+        console.log(`📊 Total results after pagination: ${allResults.length}`);
+        
+        // Check if league hasn't started yet
+        const leagueStartEvent = data.league.start_event || 1;
+        
+        // Update data with all results
+        data.standings.results = allResults;
         leagueData = data;
         
         // Save current league info to localStorage for settings navigation
         localStorage.setItem('currentLeagueId', leagueId);
         localStorage.setItem('currentLeagueName', data.league.name);
-        localStorage.setItem('currentLeaguePlayerCount', data.standings.results.length);
+        localStorage.setItem('currentLeaguePlayerCount', allResults.length);
+        localStorage.setItem('currentLeagueStartEvent', leagueStartEvent);
         
         // Display league name
         const leagueNameEl = document.getElementById('leagueName');
@@ -952,6 +1040,13 @@ async function loadLeague(leagueId) {
         // Initialize gameweek selector
         const currentGW = await initializeGameweekSelector();
         currentGameweek = currentGW;
+        
+        // Check if league hasn't started yet
+        if (leagueStartEvent > currentGW) {
+            showError(`League này bắt đầu từ GW${leagueStartEvent}. Hiện tại mới là GW${currentGW}. Vui lòng quay lại khi league đã bắt đầu.`);
+            hideLoading();
+            return;
+        }
         
         // Reset gameweek data for new league
         allGameweeksData = {};
@@ -984,9 +1079,30 @@ async function loadGameweekData(gameweek) {
             console.error('Invalid bootstrap data, using gameweek from parameter');
         }
         
-        // If we don't have full history yet, load all gameweeks data
-        if (!allGameweeksData['fullHistory']) {
+        // Check if we need to load/reload data:
+        // 1. If fullHistory is not set (first load)
+        // 2. If requested gameweek is higher than maxLoadedGW (need to extend data)
+        // 3. If data for requested gameweek doesn't exist
+        const maxLoadedGW = allGameweeksData['maxLoadedGW'] || 0;
+        const hasDataForGW = allGameweeksData[gameweek] && allGameweeksData[gameweek].length > 0;
+        const needsLoad = !allGameweeksData['fullHistory'] || gameweek > maxLoadedGW || !hasDataForGW;
+        
+        console.log(`🔍 loadGameweekData(${gameweek}): maxLoadedGW=${maxLoadedGW}, hasDataForGW=${hasDataForGW}, needsLoad=${needsLoad}`);
+        console.log(`🔍 allGameweeksData keys:`, Object.keys(allGameweeksData));
+        console.log(`🔍 leagueData:`, leagueData);
+        
+        if (needsLoad) {
+            // Check if leagueData is available
+            if (!leagueData || !leagueData.standings || !leagueData.standings.results) {
+                console.error('❌ leagueData is not available, need to reload league first');
+                showError('Dữ liệu league chưa được tải. Vui lòng chọn lại league.');
+                hideLoading();
+                return;
+            }
+            
             const standings = leagueData.standings.results;
+            console.log(`🔍 standings count: ${standings.length}`);
+            
             const allEntriesHistory = {};
             const totalEntries = standings.length;
             
@@ -1004,6 +1120,8 @@ async function loadGameweekData(gameweek) {
                         entryName: standing.entry_name,
                         history: history.current
                     };
+                } else {
+                    console.warn(`⚠️ No history data for entry ${standing.entry}`);
                 }
                 
                 // Small delay to prevent rate limiting
@@ -1012,14 +1130,25 @@ async function loadGameweekData(gameweek) {
                 }
             }
             
+            console.log(`🔍 allEntriesHistory count: ${Object.keys(allEntriesHistory).length}`);
+            
             updateProgress(45, 'Đang xử lý dữ liệu các gameweeks...');
             
-            // Calculate ranks for all gameweeks
-            const totalGW = gameweek;
+            // Calculate ranks for gameweeks - always process from 1 to requested gameweek
+            // to ensure all data is available
+            const startGW = 1;
+            const totalGWToProcess = gameweek;
+            let processedGW = 0;
             
-            for (let gw = 1; gw <= gameweek; gw++) {
-                const gwProgress = 45 + Math.round((gw / totalGW) * 50); // 45-95% for processing
-                updateProgress(gwProgress, `Đang xử lý GW ${gw}/${totalGW}...`);
+            for (let gw = startGW; gw <= gameweek; gw++) {
+                processedGW++;
+                const gwProgress = 45 + Math.round((processedGW / totalGWToProcess) * 50); // 45-95% for processing
+                updateProgress(gwProgress, `Đang xử lý GW ${gw}/${gameweek}...`);
+                
+                // Skip if already have data in memory for this GW
+                if (allGameweeksData[gw] && allGameweeksData[gw].length > 0) {
+                    continue;
+                }
                 
                 // Check if we have cached data for this GW (only for completed GWs)
                 const isCompletedGW = gw < currentGWId;
@@ -1052,11 +1181,21 @@ async function loadGameweekData(gameweek) {
                                 }
                             });
                             
+                            // Calculate GW points after deducting transfer cost
+                            // gwHistory.points is points BEFORE transfer cost
+                            // gwHistory.event_transfers_cost is the transfer cost (e.g., 4, 8, etc.)
+                            const transferCost = gwHistory.event_transfers_cost || 0;
+                            const gwTransfers = gwHistory.event_transfers || 0; // Number of transfers this GW
+                            const gwPointsNet = gwHistory.points - transferCost;
+                            
                             gwData.push({
                                 entry: parseInt(entryId),
                                 playerName: entryData.playerName,
                                 entryName: entryData.entryName,
-                                gwPoints: gwHistory.points,
+                                gwPoints: gwPointsNet, // Points AFTER transfer cost deduction
+                                gwPointsGross: gwHistory.points, // Points BEFORE transfer cost (for reference)
+                                transferCost: transferCost, // Transfer cost for this GW
+                                gwTransfers: gwTransfers, // Number of transfers this GW
                                 totalPoints: gwHistory.total_points,
                                 gwRank: gwHistory.rank,
                                 totalTransfers: totalTransfers,
@@ -1067,6 +1206,8 @@ async function loadGameweekData(gameweek) {
                             });
                         }
                     });
+                    
+                    console.log(`🔍 GW${gw} gwData count: ${gwData.length}`);
                     
                     // Sort and rank - will load picks if needed
                     await sortAndRankGWData(gwData, gw, currentGWId);
@@ -1086,7 +1227,19 @@ async function loadGameweekData(gameweek) {
             }
             
             allGameweeksData['fullHistory'] = true;
+            allGameweeksData['maxLoadedGW'] = gameweek; // Track the max GW loaded
+            console.log(`✅ Finished loading. allGameweeksData[${gameweek}] count:`, allGameweeksData[gameweek]?.length);
             updateProgress(100, 'Hoàn thành!');
+        }
+        
+        console.log(`🔍 Before displayStandings: allGameweeksData[${gameweek}] =`, allGameweeksData[gameweek]);
+        
+        // Safety check - if still no data after loading, show appropriate error
+        if (!allGameweeksData[gameweek] || allGameweeksData[gameweek].length === 0) {
+            console.error(`❌ No data available for GW${gameweek} after loading attempt`);
+            showError(`Không thể tải dữ liệu cho GW${gameweek}. Vui lòng kiểm tra kết nối mạng và thử lại.`);
+            hideLoading();
+            return;
         }
         
         await displayStandings(gameweek);
@@ -1527,7 +1680,7 @@ async function displayStandings(gameweek) {
     let data = allGameweeksData[gameweek];
     
     if (!data || data.length === 0) {
-        showError('Không có dữ liệu cho gameweek này');
+        showError(`Không có dữ liệu cho GW${gameweek}. Gameweek này có thể chưa diễn ra hoặc API đang bận. Vui lòng thử lại sau.`);
         return;
     }
     
@@ -1588,6 +1741,10 @@ async function displayStandings(gameweek) {
         // Check if there are other entries with same GW points (need to show tiebreaker)
         const sameGWPoints = data.filter(e => e.gwPoints === entry.gwPoints);
         let gwPointsDisplay = `<strong>${entry.gwPoints}</strong>`;
+        // Show transfer info if any transfers were made with cost
+        if (entry.transferCost > 0) {
+            gwPointsDisplay += `<div class="transfer-cost-info">${entry.gwTransfers} transfers | -${entry.transferCost} pts</div>`;
+        }
         if (sameGWPoints.length > 1 && entry.captainPoints !== null) {
             gwPointsDisplay += `<div class="tiebreaker-info">C:${entry.captainPoints} | V:${entry.vicePoints} | B:${entry.benchPoints}</div>`;
         }
@@ -1690,6 +1847,9 @@ function displaySummary() {
 // Load last used entry ID on page load and auto-load leagues
 window.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded');
+    
+    // Check cache version and clear if needed
+    checkCacheVersion();
     
     // Setup event listeners
     const loadUserBtn = document.getElementById('loadUser');

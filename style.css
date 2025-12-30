@@ -989,6 +989,13 @@ tbody tr:last-child td {
     display: block;
 }
 
+.transfer-cost-info {
+    font-size: 0.75rem;
+    color: var(--error-color);
+    margin-top: 2px;
+    font-weight: 500;
+}
+
 .rank-1 {
     background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
     font-weight: bold;
