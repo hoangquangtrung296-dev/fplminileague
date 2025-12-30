@@ -1,14 +1,29 @@
 // FPL API URLs
 const API_BASE = 'https://fantasy.premierleague.com/api';
-const CORS_PROXIES = [
-    { url: '', needsEncode: false }, // Direct (no proxy) - try first on HTTPS
-    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
-    { url: 'https://corsproxy.io/?', needsEncode: false }
+
+// Detect if running locally (file://) or on server (http/https)
+const isLocalFile = window.location.protocol === 'file:';
+
+// Configure proxies based on environment
+const CORS_PROXIES = isLocalFile ? [
+    // For local file:// - use fastest proxies first
+    { url: 'https://corsproxy.io/?', needsEncode: false },
+    { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
+    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true }
+] : [
+    // For http/https - try direct first
+    { url: '', needsEncode: false }, // Direct (no proxy)
+    { url: 'https://corsproxy.io/?', needsEncode: false },
+    { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
+    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true }
 ];
 
 // Helper to fetch with optional CORS proxy
 async function fetchWithProxy(endpoint, tryProxies = true) {
     const fullUrl = `${API_BASE}${endpoint}`;
+    
+    console.log(`📡 Fetching: ${endpoint}`);
+    console.log(`🔧 Environment: ${isLocalFile ? 'Local file (file://)' : 'Web server (http/https)'}`);
     
     // Try each proxy in order
     for (let i = 0; i < CORS_PROXIES.length; i++) {
@@ -26,18 +41,41 @@ async function fetchWithProxy(endpoint, tryProxies = true) {
                 url = `${proxy}${fullUrl}`;
             }
             
-            console.log(`Trying ${!proxy ? 'direct' : 'proxy'} fetch (attempt ${i + 1}/${CORS_PROXIES.length})`);
+            const proxyName = !proxy ? 'Direct API' : proxy.includes('allorigins') ? 'AllOrigins' : proxy.includes('corsproxy') ? 'CorsProxy' : 'CodeTabs';
+            console.log(`⏳ Attempt ${i + 1}/${CORS_PROXIES.length}: ${proxyName}`);
             
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                console.log(`✓ Fetch successful with ${!proxy ? 'direct API' : 'proxy'}`);
-                return data;
+            // Add timeout to prevent hanging
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`✅ SUCCESS with ${proxyName}!`);
+                    return data;
+                }
+                
+                console.log(`❌ Failed: ${response.status} ${response.statusText}`);
+            } catch (fetchErr) {
+                clearTimeout(timeoutId);
+                if (fetchErr.name === 'AbortError') {
+                    console.log(`⏱️ Timeout (5s) with ${proxyName}`);
+                } else {
+                    throw fetchErr;
+                }
             }
-            
-            console.log(`✗ Failed with status ${response.status}`);
         } catch (err) {
-            console.log(`✗ Error:`, err.message);
+            console.log(`❌ Error: ${err.message}`);
         }
     }
     
