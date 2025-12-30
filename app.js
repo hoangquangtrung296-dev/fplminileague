@@ -1,34 +1,48 @@
 // FPL API URLs
 const API_BASE = 'https://fantasy.premierleague.com/api';
-const CORS_PROXY = 'https://corsproxy.io/?';
+const CORS_PROXIES = [
+    { url: '', needsEncode: false }, // Direct (no proxy) - try first on HTTPS
+    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
+    { url: 'https://corsproxy.io/?', needsEncode: false }
+];
 
 // Helper to fetch with optional CORS proxy
-async function fetchWithProxy(endpoint, useProxy = true) {
-    // Try direct first (works when deployed to GitHub Pages or other HTTPS hosts)
-    try {
-        const directUrl = `${API_BASE}${endpoint}`;
-        const response = await fetch(directUrl);
-        if (response.ok) {
-            return await response.json();
-        }
-    } catch (err) {
-        console.log('Direct fetch failed, trying with proxy...');
-    }
+async function fetchWithProxy(endpoint, tryProxies = true) {
+    const fullUrl = `${API_BASE}${endpoint}`;
     
-    // Fallback to proxy if direct fails
-    if (useProxy) {
+    // Try each proxy in order
+    for (let i = 0; i < CORS_PROXIES.length; i++) {
         try {
-            const proxyUrl = `${CORS_PROXY}${API_BASE}${endpoint}`;
-            const response = await fetch(proxyUrl);
-            if (response.ok) {
-                return await response.json();
+            const proxyConfig = CORS_PROXIES[i];
+            const proxy = proxyConfig.url;
+            
+            // Build URL based on whether proxy needs encoding
+            let url;
+            if (!proxy) {
+                url = fullUrl; // Direct
+            } else if (proxyConfig.needsEncode) {
+                url = `${proxy}${encodeURIComponent(fullUrl)}`;
+            } else {
+                url = `${proxy}${fullUrl}`;
             }
+            
+            console.log(`Trying ${!proxy ? 'direct' : 'proxy'} fetch (attempt ${i + 1}/${CORS_PROXIES.length})`);
+            
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`✓ Fetch successful with ${!proxy ? 'direct API' : 'proxy'}`);
+                return data;
+            }
+            
+            console.log(`✗ Failed with status ${response.status}`);
         } catch (err) {
-            console.error('Proxy fetch also failed:', err);
+            console.log(`✗ Error:`, err.message);
         }
     }
     
-    throw new Error(`Failed to fetch: ${endpoint}`);
+    console.error('❌ All fetch attempts failed for:', endpoint);
+    return null; // Return null instead of throwing
 }
 
 // App state
@@ -905,14 +919,13 @@ async function loadGameweekData(gameweek) {
         // Get bootstrap data to check which GWs are finished
         const bootstrapData = await fetchBootstrapData();
         
-        // Check if bootstrapData is valid
-        if (!bootstrapData || !bootstrapData.events || !Array.isArray(bootstrapData.events)) {
-            console.error('Invalid bootstrap data, using gameweek from parameter');
-            // Continue with the gameweek parameter as fallback
-            const currentGWId = gameweek;
-        } else {
+        // Check if bootstrapData is valid and get current GW
+        let currentGWId = gameweek; // Default to parameter
+        if (bootstrapData && bootstrapData.events && Array.isArray(bootstrapData.events)) {
             const currentGWInfo = bootstrapData.events.find(e => e.is_current);
-            var currentGWId = currentGWInfo ? currentGWInfo.id : gameweek;
+            currentGWId = currentGWInfo ? currentGWInfo.id : gameweek;
+        } else {
+            console.error('Invalid bootstrap data, using gameweek from parameter');
         }
         
         // If we don't have full history yet, load all gameweeks data
