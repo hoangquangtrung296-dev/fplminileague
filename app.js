@@ -2,19 +2,37 @@
 const API_BASE = 'https://fantasy.premierleague.com/api';
 
 // Detect if running locally (file://) or on server (http/https)
-const isLocalFile = window.location.protocol === 'file:';
+// Allow override via URL parameter: ?mode=local or ?mode=server
+// OR via global variable: window.FORCE_LOCAL_MODE = true (set in index_local.html)
+const urlParams = new URLSearchParams(window.location.search);
+const forceMode = urlParams.get('mode'); // 'local' or 'server'
+
+let isLocalFile;
+if (window.FORCE_LOCAL_MODE === true) {
+    isLocalFile = true;
+    console.log('🔧 FORCED LOCAL MODE (via global variable - proxy-first)');
+} else if (forceMode === 'local') {
+    isLocalFile = true;
+    console.log('🔧 FORCED LOCAL MODE (via URL parameter - proxy-first)');
+} else if (forceMode === 'server') {
+    isLocalFile = false;
+    console.log('🔧 FORCED SERVER MODE (via URL parameter - direct-first)');
+} else {
+    isLocalFile = window.location.protocol === 'file:';
+    console.log(`🔧 AUTO-DETECT MODE: ${isLocalFile ? 'Local file (file://)' : 'Web server (http/https)'}`);
+}
 
 // Configure proxies based on environment
 const CORS_PROXIES = isLocalFile ? [
-    // For local file:// - use fastest proxies first
-    { url: 'https://corsproxy.io/?', needsEncode: false },
+    // For local file:// - CodeTabs works best, try it first
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
-    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true }
+    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
+    { url: 'https://corsproxy.io/?', needsEncode: false }
 ] : [
     // For http/https - try direct first
     { url: '', needsEncode: false }, // Direct (no proxy)
-    { url: 'https://corsproxy.io/?', needsEncode: false },
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
+    { url: 'https://corsproxy.io/?', needsEncode: false },
     { url: 'https://api.allorigins.win/raw?url=', needsEncode: true }
 ];
 
