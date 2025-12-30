@@ -950,6 +950,12 @@ async function loadGameweekData(gameweek) {
                     
                     Object.keys(allEntriesHistory).forEach(entryId => {
                         const entryData = allEntriesHistory[entryId];
+                        
+                        // Check if history exists
+                        if (!entryData || !entryData.history || !Array.isArray(entryData.history)) {
+                            return;
+                        }
+                        
                         const gwHistory = entryData.history.find(h => h.event === gw);
                         
                         if (gwHistory) {
