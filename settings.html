@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cài đặt - FPL Mini League Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,14 +28,35 @@
                 <h3>📊 Thông tin League</h3>
                 <div class="form-row">
                     <div class="form-group">
+                        <label for="leagueId">League ID:</label>
+                        <input type="text" id="leagueId" readonly>
+                    </div>
+                    <div class="form-group">
                         <label for="leagueName">Tên League:</label>
                         <input type="text" id="leagueName" readonly>
                     </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label for="playerCount">Số người chơi:</label>
                         <input type="number" id="playerCount" readonly>
                     </div>
+                    <div class="form-group"></div>
                 </div>
+            </div>
+
+            <!-- League History (Hall of Fame) -->
+            <div class="settings-section">
+                <h3>🏆 Lịch Sử Vô Địch</h3>
+                <p class="section-description">Danh sách các nhà vô địch qua các mùa giải.</p>
+                
+                <div id="historyList" class="history-list">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+                
+                <button type="button" id="addHistoryBtn" class="btn btn-secondary">
+                    ➕ Thêm Nhà Vô Địch
+                </button>
             </div>
 
             <!-- GW Range -->
@@ -78,7 +102,8 @@
 
             <!-- Prize Money -->
             <div class="settings-section">
-                <h3>🏆 Giải thưởng</h3>
+                <h3>🏆 Giải thưởng Tổng</h3>
+                <p class="section-description">Giải thưởng cho người đứng Nhất, Nhì, Ba và Khuyến Khích (thứ 4) theo tổng điểm.</p>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="prize1st">Giải Nhất (VND):</label>
@@ -95,9 +120,29 @@
                         <input type="text" id="prize3rd" placeholder="0" value="0">
                     </div>
                     <div class="form-group">
+                        <label for="prizeEncouragement">Giải Khuyến Khích (VND):</label>
+                        <input type="text" id="prizeEncouragement" placeholder="0" value="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="encouragementName">Tên giải khuyến khích (tuỳ chọn):</label>
+                        <input type="text" id="encouragementName" placeholder="Giải Khuyến Khích" value="">
+                    </div>
+                    <div class="form-group"></div>
+                </div>
+            </div>
+
+            <!-- Champion Cup -->
+            <div class="settings-section">
+                <h3>🏅 Cúp Vô Địch</h3>
+                <p class="section-description">Giải thưởng đặc biệt dành cho nhà vô địch (cộng thêm vào giải Nhất).</p>
+                <div class="form-row">
+                    <div class="form-group">
                         <label for="prizeChampion">Cúp Vô Địch (VND):</label>
                         <input type="text" id="prizeChampion" placeholder="0" value="0">
                     </div>
+                    <div class="form-group"></div>
                 </div>
             </div>
 
@@ -138,23 +183,6 @@
                 </button>
             </div>
 
-            <!-- Encouragement Prize -->
-            <div class="settings-section">
-                <h3>🎁 Giải Khuyến Khích</h3>
-                <p class="section-description">Giải thưởng cho người đứng thứ 4. Chỉ hiển thị khi có nhập số tiền.</p>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="prizeEncouragement">Tiền thưởng (VND):</label>
-                        <input type="text" id="prizeEncouragement" placeholder="0" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label for="encouragementName">Tên giải (tuỳ chọn):</label>
-                        <input type="text" id="encouragementName" placeholder="Giải Khuyến Khích" value="">
-                    </div>
-                </div>
-            </div>
-
             <!-- Summary -->
             <div class="settings-section summary-section">
                 <h3>📊 Tổng kết</h3>
@@ -189,6 +217,9 @@
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">💾 Lưu cài đặt</button>
                 <button type="button" id="resetBtn" class="btn btn-secondary">🔄 Đặt lại mặc định</button>
+                <button type="button" id="exportBtn" class="btn btn-secondary">📤 Export JSON</button>
+                <button type="button" id="importBtn" class="btn btn-secondary">📥 Import JSON</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;">
             </div>
         </form>
 
