@@ -1,38 +1,13 @@
 // Load settings from localStorage for specific league
-function loadSettings(leagueId = null) {
+async function loadSettings(leagueId = null) {
     // Use current league ID if not provided
     if (!leagueId) {
         leagueId = localStorage.getItem('currentLeagueId');
     }
     
-    if (!leagueId) {
-        // No league ID, return default settings
-        const playerCount = parseInt(localStorage.getItem('currentLeaguePlayerCount')) || 20;
-        return {
-            maxRanks: playerCount,
-            rankPayments: generateDefaultPayments(playerCount),
-            startGW: 1,
-            endGW: 38,
-            prize1st: 0,
-            prize2nd: 0,
-            prize3rd: 0,
-            prizeChampion: 0,
-            prizeH2H: 0,
-            prizeEncouragement: 0,
-            encouragementName: '',
-            h2hLeagueId: null,
-            h2hLeagueName: '',
-            stages: []
-        };
-    }
-    
-    const savedSettings = localStorage.getItem(`fplSettings_${leagueId}`);
-    if (savedSettings) {
-        return JSON.parse(savedSettings);
-    }
-    // Default settings for this league
     const playerCount = parseInt(localStorage.getItem('currentLeaguePlayerCount')) || 20;
-    return {
+    
+    const defaultSettings = {
         maxRanks: playerCount,
         rankPayments: generateDefaultPayments(playerCount),
         startGW: 1,
@@ -46,8 +21,38 @@ function loadSettings(leagueId = null) {
         encouragementName: '',
         h2hLeagueId: null,
         h2hLeagueName: '',
-        stages: [] // Array of stage objects: {startGW, endGW, prize, name}
+        stages: [],
+        leagueHistory: []
     };
+    
+    if (!leagueId) {
+        return defaultSettings;
+    }
+    
+    // First check localStorage
+    const savedSettings = localStorage.getItem(`fplSettings_${leagueId}`);
+    if (savedSettings) {
+        return JSON.parse(savedSettings);
+    }
+    
+    // Try to load from default_settings.json
+    try {
+        const response = await fetch('default_settings.json');
+        if (response.ok) {
+            const defaultSettingsFile = await response.json();
+            if (defaultSettingsFile[leagueId]) {
+                console.log(`Loaded default settings for league ${leagueId} from file`);
+                const fileSettings = defaultSettingsFile[leagueId];
+                // Merge with default settings to ensure all fields exist
+                return { ...defaultSettings, ...fileSettings, maxRanks: playerCount };
+            }
+        }
+    } catch (e) {
+        console.log('No default_settings.json found:', e.message);
+    }
+    
+    // Return default settings
+    return defaultSettings;
 }
 
 // Handle back button navigation
@@ -212,7 +217,8 @@ function getFormSettings() {
         encouragementName: document.getElementById('encouragementName').value || '',
         h2hLeagueId: document.getElementById('h2hLeague').value || null,
         h2hLeagueName: document.getElementById('h2hLeague').selectedOptions[0]?.text || '',
-        stages
+        stages,
+        leagueHistory: getHistoryFromForm()
     };
 }
 
@@ -409,6 +415,158 @@ function loadStages(stages = []) {
     });
 }
 
+// Generate history item HTML
+function createHistoryElement(history = {}, index = 0, isNew = false) {
+    const historyDiv = document.createElement('div');
+    historyDiv.className = 'history-item';
+    
+    const year = history.year || '';
+    // Default league name to current league name for new items
+    const currentLeagueName = localStorage.getItem('currentLeagueName') || '';
+    const leagueName = history.leagueName || (isNew ? currentLeagueName : '');
+    const champion = history.champion || '';
+    const teamName = history.teamName || '';
+    
+    // Get players list from localStorage
+    const playersListStr = localStorage.getItem('currentLeaguePlayers');
+    const playersList = playersListStr ? JSON.parse(playersListStr) : [];
+    
+    // Generate player options
+    const playerOptions = playersList.map(p => 
+        `<option value="${p.name}" data-team="${p.teamName}" ${p.name === champion ? 'selected' : ''}>${p.name}</option>`
+    ).join('');
+    
+    historyDiv.innerHTML = `
+        <div class="history-header">
+            <span class="history-trophy">🏆</span>
+            <button type="button" class="btn-remove-history" title="Xóa">✕</button>
+        </div>
+        <div class="history-body">
+            <div class="form-group">
+                <label>Mùa giải:</label>
+                <input type="text" class="history-year" value="${year}" placeholder="Ví dụ: 2023-24">
+            </div>
+            <div class="form-group">
+                <label>Tên League:</label>
+                <input type="text" class="history-league-name" value="${leagueName}" placeholder="Tên mini league">
+            </div>
+            <div class="form-group">
+                <label>Nhà vô địch:</label>
+                <div class="history-player-select">
+                    <select class="history-champion-select">
+                        <option value="">-- Chọn từ danh sách --</option>
+                        ${playerOptions}
+                        <option value="__custom__">✏️ Nhập tên khác...</option>
+                    </select>
+                    <input type="text" class="history-champion" value="${champion}" placeholder="Tên người chơi" style="${playersList.length > 0 && !champion ? 'display:none;' : ''}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Tên đội:</label>
+                <input type="text" class="history-team-name" value="${teamName}" placeholder="Tên đội FPL">
+            </div>
+        </div>
+    `;
+    
+    // Add event listener for remove button
+    const removeBtn = historyDiv.querySelector('.btn-remove-history');
+    removeBtn.addEventListener('click', () => {
+        historyDiv.remove();
+    });
+    
+    // Add event listener for player select
+    const championSelect = historyDiv.querySelector('.history-champion-select');
+    const championInput = historyDiv.querySelector('.history-champion');
+    const teamNameInput = historyDiv.querySelector('.history-team-name');
+    
+    if (championSelect) {
+        championSelect.addEventListener('change', function() {
+            const selectedValue = this.value;
+            const selectedOption = this.selectedOptions[0];
+            
+            if (selectedValue === '__custom__') {
+                // Show input for custom entry
+                championInput.style.display = '';
+                championInput.value = '';
+                championInput.focus();
+            } else if (selectedValue) {
+                // Use selected player
+                championInput.style.display = 'none';
+                championInput.value = selectedValue;
+                // Auto-fill team name
+                const teamNameFromData = selectedOption.dataset.team;
+                if (teamNameFromData) {
+                    teamNameInput.value = teamNameFromData;
+                }
+            } else {
+                // No selection
+                championInput.style.display = playersList.length > 0 ? 'none' : '';
+                championInput.value = '';
+            }
+        });
+        
+        // If champion value exists but not in list, show input
+        if (champion && !playersList.find(p => p.name === champion)) {
+            championSelect.value = '__custom__';
+            championInput.style.display = '';
+        }
+    }
+    
+    return historyDiv;
+}
+
+// Add new history item
+function addHistory(history) {
+    const historyList = document.getElementById('historyList');
+    
+    if (!history) {
+        history = {};
+    }
+    
+    // isNew = true for new items to auto-fill league name
+    const historyElement = createHistoryElement(history, historyList.children.length, true);
+    historyList.appendChild(historyElement);
+}
+
+// Load history from settings
+function loadHistory(historyArray = []) {
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = '';
+    
+    historyArray.forEach((history, index) => {
+        const historyElement = createHistoryElement(history, index);
+        historyList.appendChild(historyElement);
+    });
+}
+
+// Get history from form
+function getHistoryFromForm() {
+    const historyList = [];
+    const historyElements = document.querySelectorAll('.history-item');
+    
+    historyElements.forEach(historyEl => {
+        const year = historyEl.querySelector('.history-year').value.trim();
+        const leagueName = historyEl.querySelector('.history-league-name').value.trim();
+        
+        // Get champion from input (which is updated by select)
+        const championInput = historyEl.querySelector('.history-champion');
+        const champion = championInput.value.trim();
+        
+        const teamName = historyEl.querySelector('.history-team-name').value.trim();
+        
+        if (year || champion) { // Only save if at least year or champion is filled
+            historyList.push({
+                year,
+                leagueName,
+                champion,
+                teamName
+            });
+        }
+    });
+    
+    return historyList;
+}
+
 // Load H2H leagues from localStorage
 function loadH2HLeagues() {
     const userLeaguesStr = localStorage.getItem('userLeagues');
@@ -472,13 +630,15 @@ function showSaveMessage() {
 }
 
 // Initialize page
-function initializePage() {
-    const settings = loadSettings();
+async function initializePage() {
+    const settings = await loadSettings();
     
     // Load league info from localStorage
+    const leagueId = localStorage.getItem('currentLeagueId') || 'Chưa có';
     const leagueName = localStorage.getItem('currentLeagueName') || 'Chưa chọn league';
     const playerCount = parseInt(localStorage.getItem('currentLeaguePlayerCount')) || 20;
     
+    document.getElementById('leagueId').value = leagueId;
     document.getElementById('leagueName').value = leagueName;
     document.getElementById('playerCount').value = playerCount;
     document.getElementById('startGW').value = settings.startGW || 1;
@@ -513,6 +673,9 @@ function initializePage() {
     
     // Load stages
     loadStages(settings.stages || []);
+    
+    // Load league history
+    loadHistory(settings.leagueHistory || []);
     
     // Update summary
     updateSummary();
@@ -558,6 +721,10 @@ document.getElementById('addStageBtn').addEventListener('click', () => {
     addStage();
 });
 
+document.getElementById('addHistoryBtn').addEventListener('click', () => {
+    addHistory();
+});
+
 document.getElementById('settingsForm').addEventListener('submit', (e) => {
     e.preventDefault();
     
@@ -583,7 +750,8 @@ document.getElementById('resetBtn').addEventListener('click', () => {
             encouragementName: '',
             h2hLeagueId: null,
             h2hLeagueName: '',
-            stages: []
+            stages: [],
+            leagueHistory: []
         };
         
         saveSettings(defaultSettings);
@@ -603,9 +771,103 @@ document.getElementById('resetBtn').addEventListener('click', () => {
         
         generateRankInputs(playerCount, defaultSettings.rankPayments);
         loadStages([]);
+        loadHistory([]);
         updateSummary();
         showSaveMessage();
     }
+});
+
+// Export settings to JSON file
+document.getElementById('exportBtn').addEventListener('click', () => {
+    const settings = getFormSettings();
+    const leagueId = localStorage.getItem('currentLeagueId');
+    const leagueName = localStorage.getItem('currentLeagueName') || 'Unknown';
+    
+    // Create export object with metadata
+    const exportData = {
+        _meta: {
+            leagueId: leagueId,
+            leagueName: leagueName,
+            exportDate: new Date().toISOString(),
+            version: '1.0'
+        },
+        settings: settings
+    };
+    
+    // Create and download JSON file
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fpl_settings_${leagueId}_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+});
+
+// Import settings from JSON file
+document.getElementById('importBtn').addEventListener('click', () => {
+    document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const importData = JSON.parse(text);
+        
+        // Validate import data
+        if (!importData.settings) {
+            alert('File không hợp lệ: Không tìm thấy settings');
+            return;
+        }
+        
+        const settings = importData.settings;
+        
+        // Apply settings to form
+        document.getElementById('startGW').value = settings.startGW || 1;
+        document.getElementById('endGW').value = settings.endGW || 38;
+        document.getElementById('prize1st').value = formatNumber(settings.prize1st || 0);
+        document.getElementById('prize2nd').value = formatNumber(settings.prize2nd || 0);
+        document.getElementById('prize3rd').value = formatNumber(settings.prize3rd || 0);
+        document.getElementById('prizeChampion').value = formatNumber(settings.prizeChampion || 0);
+        document.getElementById('prizeH2H').value = formatNumber(settings.prizeH2H || 0);
+        document.getElementById('prizeEncouragement').value = formatNumber(settings.prizeEncouragement || 0);
+        document.getElementById('encouragementName').value = settings.encouragementName || '';
+        
+        // Load rank payments
+        const playerCount = parseInt(document.getElementById('playerCount').value);
+        generateRankInputs(playerCount, settings.rankPayments || {});
+        
+        // Load stages
+        loadStages(settings.stages || []);
+        
+        // Load history
+        loadHistory(settings.leagueHistory || []);
+        
+        // Update H2H league if available
+        if (settings.h2hLeagueId) {
+            const h2hSelect = document.getElementById('h2hLeague');
+            if (h2hSelect) {
+                h2hSelect.value = settings.h2hLeagueId;
+                // Trigger change to show info
+                h2hSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        updateSummary();
+        
+        alert('✅ Import thành công! Nhấn "Lưu cài đặt" để lưu lại.');
+    } catch (error) {
+        console.error('Import error:', error);
+        alert('Lỗi khi import: ' + error.message);
+    }
+    
+    // Reset file input
+    e.target.value = '';
 });
 
 // Handle back button navigation
@@ -624,6 +886,23 @@ function setupBackButton() {
             }
         });
     }
+}
+
+// Load default settings from default_settings.json if no saved settings exist
+async function loadDefaultSettingsFromFile(leagueId) {
+    try {
+        const response = await fetch('default_settings.json');
+        if (!response.ok) return null;
+        
+        const defaultSettings = await response.json();
+        if (defaultSettings[leagueId]) {
+            console.log(`Loaded default settings for league ${leagueId}`);
+            return defaultSettings[leagueId];
+        }
+    } catch (e) {
+        console.log('No default_settings.json found or error loading:', e.message);
+    }
+    return null;
 }
 
 // Initialize on page load
