@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thống kê - FPL Mini League Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="stats.css">
+</head>
+<body>
+    <div class="container stats-container">
+        <a href="#" id="backButton" class="back-link" title="Quay lại">←</a>
+        
+        <header>
+            <h1>📊 Thống kê League</h1>
+            <p class="subtitle" id="leagueNameDisplay">Đang tải...</p>
+        </header>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Đang tải dữ liệu thống kê...</p>
+        </div>
+
+        <div id="statsContent" class="stats-content hidden">
+            <!-- Hall of Fame Section -->
+            <section class="stats-section hall-of-fame">
+                <h2>🏆 Hall of Fame</h2>
+                <div id="hallOfFame" class="hall-of-fame-list">
+                    <p class="no-data">Chưa có dữ liệu lịch sử. Vui lòng thêm trong phần Cài đặt.</p>
+                </div>
+            </section>
+
+            <!-- Current Season Stats -->
+            <section class="stats-section">
+                <h2>⚽ Thống kê mùa giải hiện tại</h2>
+                
+                <!-- Captain Stats - 2 columns -->
+                <div class="stats-grid cols-2">
+                    <div class="stat-card-large">
+                        <h3>👑 Tổng điểm Captain cao nhất</h3>
+                        <p class="stat-description">Tổng điểm bonus từ captain trong mùa</p>
+                        <div id="topCaptainPoints" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card-large accent-purple">
+                        <h3>🎯 Captain xuất sắc nhất 1 vòng</h3>
+                        <p class="stat-description">Điểm captain cao nhất trong 1 GW</p>
+                        <div id="bestSingleCaptain" class="stat-highlight">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bench Points - 1 column full width -->
+                <div class="stats-grid cols-1">
+                    <div class="stat-card-large">
+                        <h3>🪑 Top điểm dự bị cao nhất</h3>
+                        <p class="stat-description">Tổng điểm từ băng ghế dự bị trong mùa</p>
+                        <div id="topBenchPoints" class="stat-ranking horizontal">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team Value - 2 columns -->
+                <div class="stats-grid cols-2">
+                    <div class="stat-card-large">
+                        <h3>💰 Top giá trị đội hình cao nhất</h3>
+                        <div id="topTeamValue" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card-large">
+                        <h3>🏦 Top tiền trong ngân hàng</h3>
+                        <div id="topBankValue" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GW High/Low - 1 column with 2 highlights -->
+                <div class="stats-grid cols-2 highlight-row">
+                    <div class="stat-card-large highlight-gold">
+                        <h3>⭐ Điểm GW cao nhất mùa</h3>
+                        <div id="highestGWScore" class="stat-highlight">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card-large highlight-dark">
+                        <h3>😅 Điểm GW thấp nhất mùa</h3>
+                        <div id="lowestGWScore" class="stat-highlight">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rank Changes - 2 columns -->
+                <div class="stats-grid cols-2">
+                    <div class="stat-card-large highlight-green">
+                        <h3>🚀 Cú vượt ấn tượng nhất</h3>
+                        <p class="stat-description">Bước nhảy lớn nhất trên BXH sau 1 vòng</p>
+                        <div id="biggestClimb" class="stat-highlight">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card-large highlight-red">
+                        <h3>📉 Cú trượt dài nhất</h3>
+                        <p class="stat-description">Tụt nhiều nhất trên BXH sau 1 vòng</p>
+                        <div id="biggestDrop" class="stat-highlight">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GW Wins & Losses - 1 column full width with 2 sections -->
+                <div class="stats-grid cols-1">
+                    <div class="stat-card-wide">
+                        <div class="stat-card-wide-inner">
+                            <div class="stat-card-section">
+                                <h3>🥇 Top số lần nhất vòng</h3>
+                                <div id="mostGWWins" class="stat-ranking compact">
+                                    <p class="loading-text">Đang tải...</p>
+                                </div>
+                            </div>
+                            <div class="stat-card-divider"></div>
+                            <div class="stat-card-section">
+                                <h3>🥄 Top số lần bét vòng</h3>
+                                <div id="mostGWLosses" class="stat-ranking compact">
+                                    <p class="loading-text">Đang tải...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transfers - 2 columns -->
+                <div class="stats-grid cols-2">
+                    <div class="stat-card-large">
+                        <h3>🔄 Người transfer nhiều nhất</h3>
+                        <div id="mostTransfers" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card-large">
+                        <h3>🎯 Người transfer ít nhất</h3>
+                        <div id="leastTransfers" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consistency Stats - 2 columns -->
+                <div class="stats-grid cols-2">
+                    <div class="stat-card-large">
+                        <h3>📊 Người chơi ổn định nhất</h3>
+                        <p class="stat-description">Độ lệch chuẩn điểm GW thấp nhất</p>
+                        <div id="mostConsistent" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card-large">
+                        <h3>🎢 Người chơi biến động nhất</h3>
+                        <p class="stat-description">Độ lệch chuẩn điểm GW cao nhất</p>
+                        <div id="mostVolatile" class="stat-ranking">
+                            <p class="loading-text">Đang tải...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Points Chart - Full width -->
+                <div class="chart-section">
+                    <h3>📈 Biểu đồ tổng điểm qua các vòng</h3>
+                    <p class="stat-description">Tổng điểm tích lũy của từng người chơi qua các gameweek</p>
+                    <div class="chart-container">
+                        <canvas id="positionChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="stats.js"></script>
+</body>
+</html>
