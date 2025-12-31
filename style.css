@@ -19,11 +19,12 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, var(--primary-color) 0%, #52006a 100%);
     min-height: 100vh;
     padding: 20px;
     color: var(--text-primary);
+    font-weight: 400;
 }
 
 .container {
@@ -46,6 +47,7 @@ header h1 {
     color: var(--primary-color);
     font-size: 2.5rem;
     margin-bottom: 10px;
+    font-weight: 700;
 }
 
 .subtitle {
@@ -53,6 +55,71 @@ header h1 {
     font-size: 1.1rem;
 }
 
+.header-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.header-title {
+    text-align: left;
+}
+
+.header-title h1 {
+    margin-bottom: 5px;
+}
+
+.user-info-compact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(55, 0, 60, 0.05);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(55, 0, 60, 0.1);
+}
+
+.user-badge {
+    font-size: 0.8rem;
+    color: var(--primary-color);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-badge strong {
+    color: var(--accent-color);
+}
+
+.user-actions-compact {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-compact {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-compact:hover {
+    background: #52006a;
+    transform: scale(1.1);
+}
+
+/* Legacy user-info styles (keep for compatibility) */
 .user-info {
     background: white;
     border: 2px solid var(--primary-color);
@@ -212,6 +279,32 @@ header h1 {
     background: #52006a;
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(55, 0, 60, 0.3);
+}
+
+#clearCache {
+    background: var(--text-secondary);
+    font-size: 0.85rem;
+    padding: 8px 12px;
+}
+
+#clearCache:hover {
+    background: var(--error-color);
+}
+
+.cache-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--secondary-color);
+    background: rgba(16, 185, 129, 0.1);
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-left: 10px;
+}
+
+.cache-indicator::before {
+    content: '⚡';
 }
 
 .settings-link {
@@ -695,6 +788,38 @@ header h1 {
     gap: 20px;
 }
 
+.league-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.league-title-row h2 {
+    margin: 0;
+    line-height: 1;
+}
+
+.btn-back {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-back:hover {
+    background: rgba(255, 255, 255, 0.35);
+    transform: translateX(-2px);
+}
+
 .league-actions {
     display: flex;
     gap: 10px;
@@ -703,7 +828,8 @@ header h1 {
 }
 
 .gameweek-select-compact {
-    padding: 10px 15px;
+    padding: 0 15px;
+    height: 40px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
     font-size: 0.95rem;
@@ -744,6 +870,7 @@ header h1 {
     color: white;
     border: 2px solid rgba(255, 255, 255, 0.3);
     transition: all 0.3s;
+    box-sizing: border-box;
 }
 
 .btn-settings:hover {
@@ -1432,6 +1559,105 @@ tbody tr:last-child td {
     font-size: 0.95rem;
 }
 
+/* History List (League Champions) */
+.history-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.history-item {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    border: 2px solid #fbbf24;
+    border-radius: 12px;
+    padding: 15px;
+    transition: all 0.3s;
+}
+
+.history-item:hover {
+    box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);
+    transform: translateY(-2px);
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.history-trophy {
+    font-size: 2rem;
+}
+
+.btn-remove-history {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 2px solid #fca5a5;
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+}
+
+.btn-remove-history:hover {
+    background: #dc2626;
+    color: white;
+    border-color: #dc2626;
+}
+
+.history-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.history-body .form-group {
+    margin-bottom: 0;
+}
+
+.history-body .form-group label {
+    font-size: 0.75rem;
+    margin-bottom: 3px;
+    color: #92400e;
+    font-weight: 600;
+}
+
+.history-body input {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    border: 2px solid #fde68a;
+    border-radius: 6px;
+    background: white;
+}
+
+.history-body input:focus {
+    border-color: #f59e0b;
+    outline: none;
+}
+
+.history-player-select {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-player-select select {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    border: 2px solid #fde68a;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+}
+
+.history-player-select select:focus {
+    border-color: #f59e0b;
+    outline: none;
+}
+
 .info-box {
     background: #eff6ff;
     border-left: 4px solid #3b82f6;
@@ -1492,17 +1718,17 @@ tbody tr:last-child td {
 .league-card-title {
     font-weight: 600;
     color: var(--primary-color);
-    font-size: 1.1rem;
+    font-size: 1rem;
     flex: 1;
 }
 
 .league-card-type {
     background: var(--primary-color);
     color: white;
-    padding: 3px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.7rem;
+    font-weight: 500;
     text-transform: uppercase;
 }
 
@@ -1517,12 +1743,13 @@ tbody tr:last-child td {
 
 .league-card-info {
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 400;
     line-height: 1.5;
 }
 
 .league-card-info div {
-    margin-bottom: 5px;
+    margin-bottom: 4px;
 }
 
 .league-card-rank {
