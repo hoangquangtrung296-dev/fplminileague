@@ -13,19 +13,20 @@
 <body>
     <div class="container">
         <header>
-            <h1>🏆 FPL Mini League Tracker</h1>
-            <p class="subtitle">Theo dõi và tính toán số tiền đóng góp</p>
-        </header>
-
-        <div id="userInfo" class="user-info hidden">
-            <div class="user-display">
-                <span id="currentEntryId"></span>
-                <div class="user-actions">
-                    <button id="showLeagues" class="btn btn-secondary" title="Quay lại danh sách League">📋 Danh sách League</button>
-                    <button id="changeUser" class="btn btn-secondary">🔄 Đổi User</button>
+            <div class="header-main">
+                <div class="header-title">
+                    <h1>🏆 FPL Mini League Tracker</h1>
+                    <p class="subtitle">Quản lý và thống kê Mini League của bạn</p>
+                </div>
+                <div id="userInfo" class="user-info-compact hidden">
+                    <span id="currentEntryId" class="user-badge"></span>
+                    <div class="user-actions-compact">
+                        <button id="changeUser" class="btn-compact" title="Đổi User">🔄</button>
+                        <button id="clearCache" class="btn-compact" title="Xóa Cache">🗑️</button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </header>
 
         <div class="controls" id="entryInputSection">
             <div class="input-group">
@@ -48,7 +49,10 @@
         <div id="classicLeagueInfo" class="league-info hidden">
             <div class="league-header">
                 <div class="league-header-main">
-                    <h2 id="leagueName"></h2>
+                    <div class="league-title-row">
+                        <button id="showLeagues" class="btn-back" title="Quay lại danh sách League">❮</button>
+                        <h2 id="leagueName"></h2>
+                    </div>
                     <div class="gw-info-inline">
                         <span class="gw-range-label">📅</span>
                         <span id="gwRangeInfo" class="gw-range-value">GW1 - GW38</span>
@@ -59,6 +63,7 @@
                     <select id="gameweekSelect" class="gameweek-select-compact">
                         <option value="">-- Chọn tuần --</option>
                     </select>
+                    <a href="stats.html?mode=local" class="btn btn-settings" title="Thống kê">📊</a>
                     <a href="settings.html?mode=local" class="btn btn-settings" title="Cài đặt số tiền">⚙️</a>
                 </div>
             </div>
