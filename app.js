@@ -315,7 +315,7 @@ async function fetchBootstrapData() {
 }
 
 // Cache version - increment this when cache structure changes
-const CACHE_VERSION = 3; // v3: added gwTransfers field
+const CACHE_VERSION = 4; // v4: added entry history caching
 
 // Check and clear old cache if version changed
 function checkCacheVersion() {
@@ -333,12 +333,15 @@ function clearAllGWCaches() {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith('fplCache_gw_')) {
+            if (key && (key.startsWith('fplCache_gw_') || 
+                        key.startsWith('fplCache_picks_') || 
+                        key.startsWith('fplCache_live_') ||
+                        key.startsWith('fplCache_history_'))) {
                 keysToRemove.push(key);
             }
         }
         keysToRemove.forEach(key => localStorage.removeItem(key));
-        console.log(`Đã xóa ${keysToRemove.length} cache GW cũ`);
+        console.log(`Đã xóa ${keysToRemove.length} cache cũ`);
     } catch (error) {
         console.error('Lỗi khi xóa cache:', error);
     }
@@ -458,9 +461,58 @@ function setCachedPicks(entryId, gw, data) {
     }
 }
 
-async function fetchEntryHistory(entryId) {
+async function fetchEntryHistory(entryId, currentGWId = null, useCache = true) {
+    const cacheKey = `fplCache_history_${entryId}`;
+    
+    // Check cache first
+    if (useCache) {
+        try {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                const cachedData = JSON.parse(cached);
+                // Check if cached data is still valid (up to date with current GW)
+                // If currentGWId is provided and cached data covers up to at least currentGW-1, 
+                // we still need to fetch fresh data for current GW
+                if (cachedData && cachedData.current && cachedData.cachedUpToGW) {
+                    // If we're viewing a past GW (not current), cached data is valid
+                    if (!currentGWId || cachedData.cachedUpToGW >= currentGWId - 1) {
+                        console.log(`📦 Using cached history for entry ${entryId} (cached up to GW${cachedData.cachedUpToGW})`);
+                        return cachedData;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Lỗi đọc cache history:', error);
+        }
+    }
+    
     try {
         const data = await fetchWithProxy(`/entry/${entryId}/history/`);
+        
+        // Cache the result with metadata about which GW it covers
+        if (data && data.current && data.current.length > 0) {
+            const maxGW = Math.max(...data.current.map(h => h.event));
+            const cacheData = {
+                ...data,
+                cachedUpToGW: maxGW,
+                cachedAt: Date.now()
+            };
+            
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            } catch (cacheError) {
+                if (cacheError.name === 'QuotaExceededError') {
+                    console.warn('Cache history đầy, đang dọn dẹp...');
+                    clearOldestCaches('fplCache_history_');
+                    try {
+                        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                    } catch (retryError) {
+                        console.error('Không thể lưu cache history:', retryError.message);
+                    }
+                }
+            }
+        }
+        
         return data;
     } catch (error) {
         console.error(`Lỗi khi lấy lịch sử entry ${entryId}:`, error);
@@ -763,8 +815,11 @@ async function displayH2HStandings(h2hData, leagueName, initialGameweek) {
     const leagueInfoEl = document.getElementById('h2hLeagueInfo');
     leagueInfoEl.innerHTML = `
         <div class="league-header">
-            <div>
-                <h2>⚔️ ${leagueName || 'H2H League'}</h2>
+            <div class="league-header-main">
+                <div class="league-title-row">
+                    <button id="h2hBackButton" class="btn-back" title="Quay lại danh sách League">❮</button>
+                    <h2>⚔️ ${leagueName || 'H2H League'}</h2>
+                </div>
                 <div class="gw-info-inline">
                     <span class="gw-range-label">League H2H</span>
                     <span class="gw-remaining">${standings.length} người chơi</span>
@@ -781,6 +836,16 @@ async function displayH2HStandings(h2hData, leagueName, initialGameweek) {
             </div>
         </div>
     `;
+    
+    // Add back button event listener
+    document.getElementById('h2hBackButton').addEventListener('click', () => {
+        hideElement('h2hLeagueInfo');
+        hideElement('h2hStandings');
+        showElement('leagueSelector');
+        currentLeagueId = null;
+        window.history.pushState({view: 'leagues'}, '', '#leagues');
+    });
+    
     showElement('h2hLeagueInfo');
     
     // Push state for browser back button
@@ -976,10 +1041,14 @@ async function loadLeague(leagueId) {
     showLoading();
     currentLeagueId = leagueId;
     
-    // Hide league selector and previous data
+    // Hide league selector and previous data (including H2H elements)
     hideElement('leagueSelector');
     hideElement('standings');
     hideElement('summary');
+    hideElement('h2hLeagueInfo');
+    hideElement('h2hStandings');
+    hideElement('classicLeagueInfo');
+    hideElement('leagueSettings');
     
     // Show the "Show Leagues" button when in league detail view
     const showLeaguesBtn = document.getElementById('showLeagues');
@@ -1050,6 +1119,14 @@ async function loadLeague(leagueId) {
         localStorage.setItem('currentLeagueName', data.league.name);
         localStorage.setItem('currentLeaguePlayerCount', allResults.length);
         localStorage.setItem('currentLeagueStartEvent', leagueStartEvent);
+        
+        // Save players list for settings/stats
+        const playersList = allResults.map(r => ({
+            id: r.entry,
+            name: r.player_name,
+            teamName: r.entry_name
+        }));
+        localStorage.setItem('currentLeaguePlayers', JSON.stringify(playersList));
         
         // Display league name
         const leagueNameEl = document.getElementById('leagueName');
@@ -1130,27 +1207,50 @@ async function loadGameweekData(gameweek) {
             const allEntriesHistory = {};
             const totalEntries = standings.length;
             
-            // Fetch history for each entry (with progress)
+            // Determine if we should use cache based on whether we're viewing current GW
+            // For past gameweeks, always use cache; for current GW, fetch fresh data
+            const isViewingCurrentGW = gameweek >= currentGWId;
+            const useCache = !isViewingCurrentGW;
+            
+            // Fetch history for each entry - use parallel fetching with batches for better performance
             updateProgress(10, 'Đang tải dữ liệu người chơi...');
-            for (let i = 0; i < standings.length; i++) {
-                const standing = standings[i];
-                const progress = 10 + Math.round(((i + 1) / totalEntries) * 30); // 10-40% for loading data
-                updateProgress(progress, `Đang tải dữ liệu người chơi ${i + 1}/${totalEntries}...`);
+            
+            const BATCH_SIZE = 5; // Fetch 5 entries in parallel
+            for (let batchStart = 0; batchStart < standings.length; batchStart += BATCH_SIZE) {
+                const batchEnd = Math.min(batchStart + BATCH_SIZE, standings.length);
+                const batch = standings.slice(batchStart, batchEnd);
                 
-                const history = await fetchEntryHistory(standing.entry);
-                if (history && history.current) {
-                    allEntriesHistory[standing.entry] = {
-                        playerName: standing.player_name,
-                        entryName: standing.entry_name,
-                        history: history.current
-                    };
-                } else {
-                    console.warn(`⚠️ No history data for entry ${standing.entry}`);
+                const progress = 10 + Math.round((batchEnd / totalEntries) * 30);
+                updateProgress(progress, `Đang tải dữ liệu người chơi ${batchEnd}/${totalEntries}...`);
+                
+                // Fetch all entries in batch in parallel
+                const batchPromises = batch.map(standing => 
+                    fetchEntryHistory(standing.entry, currentGWId, useCache)
+                        .then(history => ({ standing, history }))
+                        .catch(err => {
+                            console.warn(`⚠️ Error fetching history for entry ${standing.entry}:`, err);
+                            return { standing, history: null };
+                        })
+                );
+                
+                const batchResults = await Promise.all(batchPromises);
+                
+                // Process batch results
+                for (const { standing, history } of batchResults) {
+                    if (history && history.current) {
+                        allEntriesHistory[standing.entry] = {
+                            playerName: standing.player_name,
+                            entryName: standing.entry_name,
+                            history: history.current
+                        };
+                    } else {
+                        console.warn(`⚠️ No history data for entry ${standing.entry}`);
+                    }
                 }
                 
-                // Small delay to prevent rate limiting
-                if (i < standings.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
+                // Small delay between batches to prevent rate limiting
+                if (batchEnd < standings.length) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
             }
             
@@ -1448,6 +1548,34 @@ function sortTableData(data, column, direction) {
             return direction === 'asc' ? diff : -diff;
         }
         
+        // Special handling for gwPoints - use tiebreaker when points are equal
+        if (column === 'gwPoints') {
+            const pointsDiff = bVal - aVal; // Higher points = better rank (lower number)
+            if (pointsDiff !== 0) {
+                return direction === 'asc' ? -pointsDiff : pointsDiff;
+            }
+            // Points are equal, apply tiebreaker rules (same as compareTiebreakerGW)
+            // Only apply tiebreaker if stats are loaded
+            if (a.captainPoints !== null && b.captainPoints !== null) {
+                // Captain points (higher is better)
+                const captainDiff = b.captainPoints - a.captainPoints;
+                if (captainDiff !== 0) return direction === 'asc' ? -captainDiff : captainDiff;
+                
+                // Vice captain points (higher is better)
+                const viceDiff = b.vicePoints - a.vicePoints;
+                if (viceDiff !== 0) return direction === 'asc' ? -viceDiff : viceDiff;
+                
+                // Bench points (higher is better)
+                const benchDiff = b.benchPoints - a.benchPoints;
+                if (benchDiff !== 0) return direction === 'asc' ? -benchDiff : benchDiff;
+                
+                // Total points - LOWER is better (người có tổng điểm thấp hơn được ưu tiên)
+                const totalDiff = a.totalPoints - b.totalPoints;
+                return direction === 'asc' ? -totalDiff : totalDiff;
+            }
+            return 0;
+        }
+        
         // Handle string comparison
         if (typeof aVal === 'string') {
             aVal = aVal.toLowerCase();
@@ -1477,7 +1605,11 @@ async function displayLeagueSettings(currentGameweek, sortedData) {
     const remainingGWs = Math.max(0, endGW - currentGameweek);
     const remainingGWsEl = document.getElementById('remainingGWs');
     if (remainingGWsEl) {
-        remainingGWsEl.textContent = `Còn ${remainingGWs} vòng`;
+        if (remainingGWs === 0) {
+            remainingGWsEl.textContent = '🏁 Vòng cuối cùng';
+        } else {
+            remainingGWsEl.textContent = `Còn ${remainingGWs} vòng`;
+        }
     }
     
     // Combined Awards List (Prize + Current Winner)
@@ -1499,14 +1631,14 @@ async function displayLeagueSettings(currentGameweek, sortedData) {
     // Champion award (combined with first place)
     if (settings.prizeChampion > 0 || settings.prize1st > 0) {
         const champion = byTotalPoints[0] || null;
-        const totalPrize = (settings.prizeChampion || 0) + (settings.prize1st || 0);
-        const cupText = settings.prizeChampion > 0 ? ' + Cúp Vô Địch' : '';
+        const prizeMoney = settings.prize1st || 0;
+        const cupText = settings.prizeChampion > 0 ? ` + Cúp Vô Địch (${formatCurrency(settings.prizeChampion)})` : '';
         championHTML = `
             <div class="award-item champion">
                 <div class="award-icon">🏆</div>
                 <div class="award-info">
                     <div class="award-title">Vô Địch${provisionalText}</div>
-                    <div class="award-amount">${formatCurrency(totalPrize)}${cupText}</div>
+                    <div class="award-amount">${formatCurrency(prizeMoney)}${cupText}</div>
                 </div>
                 <div class="award-winner">
                     ${champion ? `
@@ -1572,7 +1704,33 @@ async function displayLeagueSettings(currentGameweek, sortedData) {
     if (championHTML) mainAwardsHTML.push(championHTML);
     if (thirdHTML) mainAwardsHTML.push(thirdHTML);
     
-    // H2H Prize (Secondary Awards)
+    // Encouragement Prize (for 4th place) - First in secondary awards
+    if (settings.prizeEncouragement > 0) {
+        const fourthPlace = byTotalPoints.length >= 4 ? byTotalPoints[3] : null;
+        const encouragementName = settings.encouragementName || 'Giải Khuyến Khích';
+        
+        secondaryAwardsHTML.push(`
+            <div class="award-item encouragement" style="border-color: #ec4899; background: linear-gradient(135deg, #fdf2f8, #fce7f3);">
+                <div class="award-icon">🎁</div>
+                <div class="award-info">
+                    <div class="award-title">${encouragementName}${provisionalText}</div>
+                    <div class="award-subtitle">Hạng 4</div>
+                    <div class="award-amount">${formatCurrency(settings.prizeEncouragement)}</div>
+                </div>
+                <div class="award-winner">
+                    ${fourthPlace ? `
+                        <div class="winner-info">
+                            <span class="winner-name">${fourthPlace.playerName}</span>
+                            <span class="winner-team">(${fourthPlace.entryName})</span>
+                        </div>
+                        <div class="winner-points">${fourthPlace.totalPoints} điểm</div>
+                    ` : '<div class="winner-tbd">Chưa xác định</div>'}
+                </div>
+            </div>
+        `);
+    }
+    
+    // H2H Prize (Secondary Awards - after encouragement)
     if (settings.prizeH2H > 0 && settings.h2hLeagueId) {
         // Fetch H2H league data
         let h2hWinner = null;
@@ -1641,32 +1799,6 @@ async function displayLeagueSettings(currentGameweek, sortedData) {
                 `);
             }
         });
-    }
-    
-    // Encouragement Prize (for 4th place)
-    if (settings.prizeEncouragement > 0) {
-        const fourthPlace = byTotalPoints.length >= 4 ? byTotalPoints[3] : null;
-        const encouragementName = settings.encouragementName || 'Giải Khuyến Khích';
-        
-        secondaryAwardsHTML.push(`
-            <div class="award-item encouragement" style="border-color: #ec4899; background: linear-gradient(135deg, #fdf2f8, #fce7f3);">
-                <div class="award-icon">🎁</div>
-                <div class="award-info">
-                    <div class="award-title">${encouragementName}${provisionalText}</div>
-                    <div class="award-subtitle">Hạng 4</div>
-                    <div class="award-amount">${formatCurrency(settings.prizeEncouragement)}</div>
-                </div>
-                <div class="award-winner">
-                    ${fourthPlace ? `
-                        <div class="winner-info">
-                            <span class="winner-name">${fourthPlace.playerName}</span>
-                            <span class="winner-team">(${fourthPlace.entryName})</span>
-                        </div>
-                        <div class="winner-points">${fourthPlace.totalPoints} điểm</div>
-                    ` : '<div class="winner-tbd">Chưa xác định</div>'}
-                </div>
-            </div>
-        `);
     }
     
     // Build final HTML with sections
@@ -1963,6 +2095,24 @@ window.addEventListener('DOMContentLoaded', async () => {
             // Clear input and focus
             document.getElementById('entryId').value = '232782';
             document.getElementById('entryId').focus();
+        });
+    }
+    
+    // Clear cache button
+    const clearCacheBtn = document.getElementById('clearCache');
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', () => {
+            if (confirm('Bạn có chắc muốn xóa cache? Dữ liệu sẽ được tải lại từ đầu.')) {
+                clearAllGWCaches();
+                allGameweeksData = {};
+                alert('Đã xóa cache thành công! Dữ liệu sẽ được tải lại khi bạn chọn gameweek.');
+                
+                // Reload current gameweek if any
+                const currentGW = document.getElementById('gameweekSelect')?.value;
+                if (currentGW) {
+                    loadGameweekData(parseInt(currentGW));
+                }
+            }
         });
     }
     
