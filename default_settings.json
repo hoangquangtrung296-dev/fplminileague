@@ -1,0 +1,149 @@
+{
+  "_readme": "File này chứa cài đặt mặc định cho các league. Key là League ID, value là settings object.",
+  "828004": {
+    "maxRanks": 16,
+    "rankPayments": {
+      "1": 0,
+      "2": 5000,
+      "3": 10000,
+      "4": 10000,
+      "5": 15000,
+      "6": 15000,
+      "7": 20000,
+      "8": 20000,
+      "9": 25000,
+      "10": 25000,
+      "11": 30000,
+      "12": 30000,
+      "13": 35000,
+      "14": 35000,
+      "15": 40000,
+      "16": 40000
+    },
+    "startGW": 1,
+    "endGW": 19,
+    "prize1st": 1000000,
+    "prize2nd": 500000,
+    "prize3rd": 300000,
+    "prizeChampion": 500000,
+    "prizeH2H": 500000,
+    "prizeEncouragement": 0,
+    "encouragementName": "",
+    "h2hLeagueId": "828132",
+    "h2hLeagueName": "[Summer] LG Open H2H",
+    "stages": [
+      {
+        "startGW": 1,
+        "endGW": 5,
+        "prize": 100000,
+        "name": "Sprint 1"
+      },
+      {
+        "startGW": 6,
+        "endGW": 10,
+        "prize": 100000,
+        "name": "Sprint 2"
+      },
+      {
+        "startGW": 11,
+        "endGW": 15,
+        "prize": 100000,
+        "name": "Sprint 3"
+      },
+      {
+        "startGW": 16,
+        "endGW": 19,
+        "prize": 100000,
+        "name": "Sprint 4"
+      }
+    ],
+    "leagueHistory": [
+      {
+        "year": "2023-2024",
+        "leagueName": "[Summer] LG Open League",
+        "champion": "Jacky Duong",
+        "teamName": "Vopa"
+      },
+      {
+        "year": "2023-2024",
+        "leagueName": "[Winter] LG Open League",
+        "champion": "Dat Le",
+        "teamName": "datLTd"
+      },
+      {
+        "year": "2024-2025",
+        "leagueName": "[Summer] LG Open League",
+        "champion": "Jacky Duong",
+        "teamName": "Vopa"
+      },
+      {
+        "year": "2024-2025",
+        "leagueName": "[Winter] LG Open League",
+        "champion": "Jacky Duong",
+        "teamName": "Vopa"
+      }
+    ]
+  },
+  "591816": {
+    "maxRanks": 13,
+    "rankPayments": {
+      "1": 0,
+      "2": 5000,
+      "3": 10000,
+      "4": 15000,
+      "5": 20000,
+      "6": 25000,
+      "7": 30000,
+      "8": 35000,
+      "9": 40000,
+      "10": 45000,
+      "11": 50000,
+      "12": 55000,
+      "13": 60000
+    },
+    "startGW": 1,
+    "endGW": 19,
+    "prize1st": 2200000,
+    "prize2nd": 1600000,
+    "prize3rd": 1000000,
+    "prizeChampion": 0,
+    "prizeH2H": 0,
+    "prizeEncouragement": 600000,
+    "encouragementName": "",
+    "h2hLeagueId": null,
+    "h2hLeagueName": "",
+    "stages": [
+      {
+        "startGW": 1,
+        "endGW": 4,
+        "prize": 400000,
+        "name": "Sprint 1"
+      },
+      {
+        "startGW": 5,
+        "endGW": 8,
+        "prize": 400000,
+        "name": "Sprint 2"
+      },
+      {
+        "startGW": 9,
+        "endGW": 12,
+        "prize": 400000,
+        "name": "Sprint 3"
+      },
+      {
+        "startGW": 13,
+        "endGW": 16,
+        "prize": 400000,
+        "name": "Sprint 4"
+      },
+      {
+        "startGW": 17,
+        "endGW": 19,
+        "prize": 400000,
+        "name": "Sprint 5"
+      }
+    ],
+    "leagueHistory": []
+  }
+}
