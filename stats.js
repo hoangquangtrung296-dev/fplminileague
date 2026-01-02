@@ -13,6 +13,41 @@ const FPL_API_BASE = 'https://fantasy.premierleague.com/api';
 const CACHE_VERSION = 4;
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes for stats (longer cache)
 
+// Clear oldest caches when storage is full
+function clearOldestStatsCache() {
+    try {
+        const cacheKeys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('fpl_cache_')) {
+                try {
+                    const cached = localStorage.getItem(key);
+                    if (cached) {
+                        const { timestamp } = JSON.parse(cached);
+                        cacheKeys.push({ key, timestamp });
+                    }
+                } catch (e) {
+                    // Invalid cache entry, add with timestamp 0 to delete
+                    cacheKeys.push({ key, timestamp: 0 });
+                }
+            }
+        }
+        
+        // Sort by timestamp (oldest first)
+        cacheKeys.sort((a, b) => a.timestamp - b.timestamp);
+        
+        // Remove oldest 50% of caches
+        const toRemove = Math.ceil(cacheKeys.length * 0.5);
+        for (let i = 0; i < toRemove && i < cacheKeys.length; i++) {
+            localStorage.removeItem(cacheKeys[i].key);
+        }
+        
+        console.log(`Đã xóa ${toRemove} cache cũ`);
+    } catch (error) {
+        console.error('Lỗi khi dọn cache:', error);
+    }
+}
+
 // Get cache from app.js format
 function getAppCache(key) {
     const cached = localStorage.getItem(`fpl_cache_${key}`);
@@ -31,7 +66,20 @@ function setAppCache(key, data) {
             data, timestamp: Date.now(), version: CACHE_VERSION
         }));
     } catch (e) {
-        console.warn('Cache storage failed:', e);
+        if (e.name === 'QuotaExceededError') {
+            console.warn('Cache đầy, đang dọn dẹp...');
+            clearOldestStatsCache();
+            try {
+                // Retry after cleanup
+                localStorage.setItem(`fpl_cache_${key}`, JSON.stringify({
+                    data, timestamp: Date.now(), version: CACHE_VERSION
+                }));
+            } catch (retryError) {
+                console.error('Không thể lưu cache sau khi dọn dẹp:', retryError.message);
+            }
+        } else {
+            console.warn('Cache storage failed:', e);
+        }
     }
 }
 
@@ -100,16 +148,22 @@ function displayHallOfFame() {
         return;
     }
     
+    // Get current year to mark current champion
+    const currentYear = new Date().getFullYear();
+    
     // Keep original order from settings (no sorting)
-    hallOfFameEl.innerHTML = history.map(h => `
-        <div class="champion-card">
+    hallOfFameEl.innerHTML = history.map(h => {
+        const isCurrentChampion = parseInt(h.year) === currentYear || parseInt(h.year) === currentYear - 1;
+        return `
+        <div class="champion-card${isCurrentChampion ? ' current-champion' : ''}">
             <div class="champion-trophy">🏆</div>
             <div class="champion-year">${h.year}</div>
             ${h.leagueName ? `<div class="champion-league-name">${h.leagueName}</div>` : ''}
             <div class="champion-name">${h.champion}</div>
             ${h.teamName ? `<div class="champion-team">${h.teamName}</div>` : ''}
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 async function fetchWithProxy(url) {
@@ -144,11 +198,11 @@ async function loadStatsData() {
     }
     
     try {
-        // Try to get bootstrap from cache first
-        let bootstrap = getAppCache('bootstrap');
+        // Try to get bootstrap from cache first (cache for 6 hours as it rarely changes)
+        let bootstrap = getAppCache('bootstrap_static');
         if (!bootstrap) {
             bootstrap = await fetchWithProxy(`${FPL_API_BASE}/bootstrap-static/`);
-            setAppCache('bootstrap', bootstrap);
+            setAppCache('bootstrap_static', bootstrap, 6 * 60 * 60 * 1000);
         }
         currentGameweek = bootstrap.events.find(e => e.is_current)?.id || 1;
         
@@ -188,7 +242,26 @@ async function loadStatsData() {
 }
 
 async function fetchAllEntryData(entries) {
+    const totalSteps = entries.length + currentGameweek + (entries.length * currentGameweek);
+    let completedSteps = 0;
+    
+    function updateProgress(message) {
+        completedSteps++;
+        const percent = Math.round((completedSteps / totalSteps) * 100);
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        if (progressBar) {
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = percent > 0 ? percent + '%' : '';
+        }
+        if (progressText) {
+            progressText.textContent = message;
+        }
+    }
+    
     // Fetch entry history for all entries - use cached data when available
+    updateProgress('Đang tải lịch sử các manager...');
     const historyPromises = entries.map(async entry => {
         // Check app.js cache format first
         const appCacheKey = `entry_history_${entry.entry}`;
@@ -204,6 +277,7 @@ async function fetchAllEntryData(entries) {
             }
         }
         
+        updateProgress(`Đã tải lịch sử ${entry.player_name}`);
         return { entryId: entry.entry, history };
     });
     
@@ -216,6 +290,7 @@ async function fetchAllEntryData(entries) {
     
     // Fetch live data for each GW to get player points (for captain calculation)
     for (let gw = 1; gw <= currentGameweek; gw++) {
+        updateProgress(`Đang tải dữ liệu GW ${gw}...`);
         const liveCacheKey = `live_${gw}`;
         let liveData = getAppCache(liveCacheKey);
         
@@ -240,6 +315,7 @@ async function fetchAllEntryData(entries) {
     }
     
     // Fetch picks for captain stats - batch process to avoid too many requests
+    updateProgress('Đang tải đội hình các manager...');
     const picksToFetch = [];
     for (const entry of entries) {
         for (let gw = 1; gw <= currentGameweek; gw++) {
@@ -259,6 +335,8 @@ async function fetchAllEntryData(entries) {
     const BATCH_SIZE = 10;
     for (let i = 0; i < picksToFetch.length; i += BATCH_SIZE) {
         const batch = picksToFetch.slice(i, i + BATCH_SIZE);
+        const progress = Math.round(((i + batch.length) / picksToFetch.length) * 100);
+        updateProgress(`Đang tải đội hình... (${progress}%)`);
         const results = await Promise.all(
             batch.map(async ({ entry, gw, name, teamName }) => {
                 try {
@@ -297,7 +375,10 @@ function calculateAllStats(entries) {
         highestGW: [],
         lowestGW: [],
         mostConsistent: [],
-        mostVolatile: []
+        mostVolatile: [],
+        highestHitCost: [], // NEW: Highest transfer cost in single GW
+        mostGreenArrows: [], // NEW: Most rank improvements
+        longestStreak: [] // NEW: Longest above-average streak
     };
     
     // Calculate GW scores for each entry to find winners/losers
@@ -347,7 +428,7 @@ function calculateAllStats(entries) {
     }
     
     // Track biggest climb/drop for each entry
-    const climbDropData = {}; // {entryId: {biggestClimb: {value, gw}, biggestDrop: {value, gw}}}
+    const climbDropData = {}; // {entryId: {biggestClimb: {value, gw}, biggestDrop: {value, gw}, recentClimb: {value, gw}, recentDrop: {value, gw}}}
     
     entries.forEach(entry => {
         const data = allStats[entry.entry];
@@ -361,8 +442,15 @@ function calculateAllStats(entries) {
         let latestBank = 0;
         let biggestClimb = { value: 0, gw: 0 };
         let biggestDrop = { value: 0, gw: 0 };
+        let recentClimb = { value: 0, gw: 0 }; // for last 5 GWs
+        let recentDrop = { value: 0, gw: 0 }; // for last 5 GWs
         let highestGWPoints = { points: 0, gw: 0 };
         let lowestGWPoints = { points: Infinity, gw: 0 };
+        let highestSingleBench = { points: 0, gw: 0 }; // highest bench points in single GW
+        let highestHitCost = { cost: 0, gw: 0, transfers: 0 }; // highest transfer cost in single GW
+        let greenArrowCount = 0; // count of rank improvements
+        let currentStreak = 0; // current above-average streak
+        let longestAboveAvgStreak = 0; // longest above-average streak
         
         history.forEach(gw => {
             // Team value & bank
@@ -377,6 +465,16 @@ function calculateAllStats(entries) {
             // Points on bench
             totalBenchPoints += gw.points_on_bench;
             
+            // Track highest bench points in single GW
+            if (gw.points_on_bench > highestSingleBench.points) {
+                highestSingleBench = { points: gw.points_on_bench, gw: gw.event };
+            }
+            
+            // Track highest hit cost in single GW
+            if (gw.event_transfers_cost > highestHitCost.cost) {
+                highestHitCost = { cost: gw.event_transfers_cost, gw: gw.event, transfers: gw.event_transfers };
+            }
+            
             // League rank changes (based on mini league ranking)
             if (gw.event > 1 && leagueRankings[gw.event] && leagueRankings[gw.event - 1]) {
                 const currentRank = leagueRankings[gw.event][entry.entry];
@@ -384,11 +482,28 @@ function calculateAllStats(entries) {
                 
                 if (currentRank && prevRank) {
                     const change = prevRank - currentRank; // positive = climb, negative = drop
+                    
+                    // Count green arrows (rank improvements)
+                    if (change > 0) {
+                        greenArrowCount++;
+                    }
+                    
+                    // All-time biggest climb/drop
                     if (change > biggestClimb.value) {
                         biggestClimb = { value: change, gw: gw.event };
                     }
                     if (change < biggestDrop.value) {
                         biggestDrop = { value: change, gw: gw.event };
+                    }
+                    
+                    // Recent 5 GWs climb/drop
+                    if (gw.event > currentGameweek - 5) {
+                        if (change > recentClimb.value) {
+                            recentClimb = { value: change, gw: gw.event };
+                        }
+                        if (change < recentDrop.value) {
+                            recentDrop = { value: change, gw: gw.event };
+                        }
                     }
                 }
             }
@@ -419,6 +534,20 @@ function calculateAllStats(entries) {
         const avgPoints = gwPointsArray.reduce((a, b) => a + b, 0) / gwPointsArray.length || 0;
         const variance = gwPointsArray.reduce((sum, p) => sum + Math.pow(p - avgPoints, 2), 0) / gwPointsArray.length;
         const stdDev = Math.sqrt(variance);
+        
+        // Calculate longest above-average streak
+        currentStreak = 0; // Reset streak counter
+        longestAboveAvgStreak = 0; // Reset longest streak
+        gwPointsArray.forEach(points => {
+            if (points >= avgPoints) {
+                currentStreak++;
+                if (currentStreak > longestAboveAvgStreak) {
+                    longestAboveAvgStreak = currentStreak;
+                }
+            } else {
+                currentStreak = 0;
+            }
+        });
         
         // Store results
         statsResults.benchPoints.push({
@@ -456,6 +585,64 @@ function calculateAllStats(entries) {
             teamName: entry.entry_name,
             value: biggestDrop.value,
             detail: biggestDrop.gw > 0 ? `GW ${biggestDrop.gw}` : ''
+        });
+        
+        // Store recent climb/drop for last 5 GWs
+        if (!statsResults.recentClimb) statsResults.recentClimb = [];
+        if (!statsResults.recentDrop) statsResults.recentDrop = [];
+        
+        statsResults.recentClimb.push({
+            entry: entry.entry,
+            name: entry.player_name,
+            teamName: entry.entry_name,
+            value: recentClimb.value,
+            detail: recentClimb.gw > 0 ? `GW ${recentClimb.gw}` : ''
+        });
+        
+        statsResults.recentDrop.push({
+            entry: entry.entry,
+            name: entry.player_name,
+            teamName: entry.entry_name,
+            value: recentDrop.value,
+            detail: recentDrop.gw > 0 ? `GW ${recentDrop.gw}` : ''
+        });
+        
+        // Store highest single GW bench points
+        if (!statsResults.highestSingleBench) statsResults.highestSingleBench = [];
+        statsResults.highestSingleBench.push({
+            entry: entry.entry,
+            name: entry.player_name,
+            teamName: entry.entry_name,
+            value: highestSingleBench.points,
+            detail: highestSingleBench.gw > 0 ? `GW ${highestSingleBench.gw}` : ''
+        });
+        
+        // Store highest hit cost
+        if (!statsResults.highestHitCost) statsResults.highestHitCost = [];
+        statsResults.highestHitCost.push({
+            entry: entry.entry,
+            name: entry.player_name,
+            teamName: entry.entry_name,
+            value: highestHitCost.cost,
+            transfers: highestHitCost.transfers,
+            detail: highestHitCost.gw > 0 ? `GW ${highestHitCost.gw}` : ''
+        });
+        
+        // Store green arrows count
+        statsResults.mostGreenArrows.push({
+            entry: entry.entry,
+            name: entry.player_name,
+            teamName: entry.entry_name,
+            value: greenArrowCount
+        });
+        
+        // Store longest streak
+        statsResults.longestStreak.push({
+            entry: entry.entry,
+            name: entry.player_name,
+            teamName: entry.entry_name,
+            value: longestAboveAvgStreak,
+            avgPoints: avgPoints.toFixed(1)
         });
         
         statsResults.mostTransfers.push({
@@ -580,6 +767,8 @@ function calculateAllStats(entries) {
     statsResults.bankValue.sort((a, b) => b.value - a.value);
     statsResults.biggestClimb.sort((a, b) => b.value - a.value);
     statsResults.biggestDrop.sort((a, b) => a.value - b.value);
+    statsResults.recentClimb.sort((a, b) => b.value - a.value);
+    statsResults.recentDrop.sort((a, b) => a.value - b.value);
     statsResults.gwWins.sort((a, b) => b.value - a.value);
     statsResults.gwLosses.sort((a, b) => b.value - a.value);
     statsResults.mostTransfers.sort((a, b) => b.value - a.value);
@@ -587,6 +776,24 @@ function calculateAllStats(entries) {
     statsResults.lowestGW.sort((a, b) => a.value - b.value);
     statsResults.mostConsistent.sort((a, b) => a.value - b.value);
     statsResults.captainPoints.sort((a, b) => b.value - a.value);
+    statsResults.highestSingleBench.sort((a, b) => b.value - a.value);
+    statsResults.highestHitCost.sort((a, b) => b.value - a.value);
+    statsResults.mostGreenArrows.sort((a, b) => b.value - a.value);
+    statsResults.longestStreak.sort((a, b) => b.value - a.value);
+    statsResults.gwLosses.sort((a, b) => b.value - a.value);
+    statsResults.mostTransfers.sort((a, b) => b.value - a.value);
+    statsResults.highestGW.sort((a, b) => b.value - a.value);
+    statsResults.lowestGW.sort((a, b) => a.value - b.value);
+    statsResults.mostConsistent.sort((a, b) => a.value - b.value);
+    statsResults.captainPoints.sort((a, b) => b.value - a.value);
+    statsResults.highestSingleBench.sort((a, b) => b.value - a.value);
+    
+    // Calculate "never came last" and "never came first"
+    const neverLast = entries.filter(entry => (lossCounts[entry.entry] || 0) === 0);
+    const neverFirst = entries.filter(entry => (winCounts[entry.entry] || 0) === 0);
+    
+    statsResults.neverLast = neverLast;
+    statsResults.neverFirst = neverFirst;
     
     // Store for display
     allStats.results = statsResults;
@@ -642,6 +849,49 @@ function displayStats() {
         document.getElementById('biggestDrop').innerHTML = renderHighlight(biggestDrop, 'hạng', '📉', false, true);
     }
     
+    // Render Recent Climb (last 5 GWs)
+    const recentClimb = results.recentClimb[0];
+    if (recentClimb && document.getElementById('recentClimb')) {
+        document.getElementById('recentClimb').innerHTML = renderHighlight(recentClimb, 'hạng', '🚀', true);
+    }
+    
+    // Render Recent Drop (last 5 GWs)
+    const recentDrop = results.recentDrop[0];
+    if (recentDrop && document.getElementById('recentDrop')) {
+        document.getElementById('recentDrop').innerHTML = renderHighlight(recentDrop, 'hạng', '📉', false, true);
+    }
+    
+    // Render Highest Single Bench
+    const highestSingleBench = results.highestSingleBench[0];
+    if (highestSingleBench && document.getElementById('highestSingleBench')) {
+        document.getElementById('highestSingleBench').innerHTML = renderHighlight(highestSingleBench, 'pts', '💺');
+    }
+    
+    // Render Never Last / Never First with humor
+    if (document.getElementById('neverLast')) {
+        document.getElementById('neverLast').innerHTML = renderNeverLastFirst(results.neverLast, 'last');
+    }
+    if (document.getElementById('neverFirst')) {
+        document.getElementById('neverFirst').innerHTML = renderNeverLastFirst(results.neverFirst, 'first');
+    }
+    
+    // Render new stats
+    // Highest Hit Cost
+    const highestHitCost = results.highestHitCost[0];
+    if (highestHitCost && document.getElementById('highestHitCost')) {
+        document.getElementById('highestHitCost').innerHTML = renderHitCostHighlight(highestHitCost);
+    }
+    
+    // Most Green Arrows
+    if (document.getElementById('mostGreenArrows')) {
+        document.getElementById('mostGreenArrows').innerHTML = renderRankingList(results.mostGreenArrows.slice(0, 5), 'lần');
+    }
+    
+    // Longest Streak
+    if (document.getElementById('longestStreak')) {
+        document.getElementById('longestStreak').innerHTML = renderStreakList(results.longestStreak.slice(0, 5));
+    }
+    
     // Render Consistency
     document.getElementById('mostConsistent').innerHTML = renderConsistencyList(results.mostConsistent.slice(0, 5));
     document.getElementById('mostVolatile').innerHTML = renderConsistencyList(results.mostConsistent.slice().reverse().slice(0, 5));
@@ -660,14 +910,15 @@ function displayStats() {
 
 function renderTotalPointsChart() {
     const allGWData = allStats.allGWData;
+    const leagueRankings = allStats.leagueRankings;
     const entries = allStats.entries;
     
-    if (!allGWData || !entries || entries.length === 0) return;
+    if (!allGWData || !leagueRankings || !entries || entries.length === 0) return;
     
     const ctx = document.getElementById('positionChart');
     if (!ctx) return;
     
-    // Prepare data for chart
+    // Prepare data for chart (now showing rankings instead of points)
     const gwLabels = [];
     for (let gw = 1; gw <= currentGameweek; gw++) {
         gwLabels.push(`GW${gw}`);
@@ -684,13 +935,9 @@ function renderTotalPointsChart() {
     const datasets = entries.map((entry, idx) => {
         const data = [];
         for (let gw = 1; gw <= currentGameweek; gw++) {
-            if (allGWData[gw]) {
-                const gwEntry = allGWData[gw].find(e => e.entry === entry.entry);
-                if (gwEntry) {
-                    data.push(gwEntry.totalPoints);
-                } else {
-                    data.push(null);
-                }
+            if (leagueRankings[gw] && leagueRankings[gw][entry.entry]) {
+                // Get ranking position (1 = first, 2 = second, etc.)
+                data.push(leagueRankings[gw][entry.entry]);
             } else {
                 data.push(null);
             }
@@ -750,22 +997,28 @@ function renderTotalPointsChart() {
                     },
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: ${context.parsed.y} pts`;
+                            const rank = context.parsed.y;
+                            return `${context.dataset.label}: Hạng ${rank}`;
                         }
                     }
                 }
             },
             scales: {
                 y: {
-                    beginAtZero: true,
+                    reverse: true, // Reverse so rank 1 is at top
+                    beginAtZero: false,
                     ticks: {
+                        stepSize: 1,
                         font: {
                             family: "'Inter', sans-serif"
+                        },
+                        callback: function(value) {
+                            return value; // Show rank numbers
                         }
                     },
                     title: {
                         display: true,
-                        text: 'Tổng điểm',
+                        text: 'Hạng',
                         font: {
                             family: "'Inter', sans-serif",
                             weight: 600
@@ -856,18 +1109,87 @@ function renderConsistencyList(data) {
 
 function renderCaptainHighlight(item) {
     return `
-        <div class="stat-highlight-main">
+        <div class="stat-highlight-main captain-highlight-horizontal">
             <div class="stat-highlight-icon">🎯</div>
             <div class="stat-highlight-info">
                 <div class="stat-highlight-name">${item.name}</div>
                 <div class="stat-highlight-team">${item.teamName}</div>
+                <div class="stat-highlight-detail-inline">
+                    Captain: <strong>${item.captainName}</strong> • ${item.detail} → <span class="stat-value-inline">${item.value} pts</span>
+                </div>
             </div>
-            <div class="stat-highlight-value">
-                ${item.value} pts
-            </div>
-        </div>
-        <div class="stat-highlight-detail">
-            Captain: <strong>${item.captainName}</strong> • ${item.detail}
         </div>
     `;
+}
+
+function renderNeverLastFirst(data, type) {
+    if (!data || data.length === 0) {
+        if (type === 'last') {
+            return '<p class="humor-text">😱 Không ai thoát được số phận bét bảng cả! Ai cũng đã trải qua cảm giác đó rồi...</p>';
+        } else {
+            return '<p class="humor-text">🎉 Wow! Tất cả mọi người đều đã từng lên đỉnh vinh quang ít nhất 1 lần! Đây là giải đấu của những nhà vô địch!</p>';
+        }
+    }
+    
+    const names = data.map(e => `<strong>${e.player_name}</strong>`);
+    let nameList = '';
+    
+    if (names.length === 1) {
+        nameList = names[0];
+    } else if (names.length === 2) {
+        nameList = `${names[0]} và ${names[1]}`;
+    } else {
+        nameList = names.slice(0, -1).join(', ') + ` và ${names[names.length - 1]}`;
+    }
+    
+    if (type === 'last') {
+        const messages = [
+            `🛡️ ${nameList} là ${names.length > 1 ? 'những cái tên' : 'cái tên'} may mắn chưa từng nếm mùi đáy bảng! Có lẽ ${names.length > 1 ? 'họ' : 'anh ấy'} đang có chiếc bùa hộ mệnh nào đó...`,
+            `✨ Vị trí cuối bảng dường như sợ ${nameList}! ${names.length > 1 ? 'Những người' : 'Người'} chơi an toàn này chưa bao giờ phải nhìn tất cả mọi người từ phía dưới.`,
+            `🎯 ${nameList} - ${names.length > 1 ? 'những chiến binh' : 'chiến binh'} kiên cường chưa từng để ai nhìn xuống! Đáy bảng vẫn đang chờ ${names.length > 1 ? 'họ' : 'anh ấy'}...`
+        ];
+        return `<p class="humor-text">${messages[Math.floor(Math.random() * messages.length)]}</p>`;
+    } else {
+        const messages = [
+            `😅 ${nameList} vẫn đang chờ đợi khoảnh khắc vinh quang đầu tiên của ${names.length > 1 ? 'mình' : 'mình'}. Đỉnh cao còn xa lắm ${names.length > 1 ? 'các bạn' : 'bạn'} ơi!`,
+            `🎪 Vị trí số 1 dường như là điều cấm kỵ với ${nameList}. ${names.length > 1 ? 'Họ' : 'Anh ấy'} đã thử mọi vị trí... trừ vị trí dẫn đầu!`,
+            `🌟 ${nameList} là minh chứng cho thuyết "quan trọng là tham gia". Ngôi vương vẫn đang là giấc mơ với ${names.length > 1 ? 'những người' : 'người'} này!`
+        ];
+        return `<p class="humor-text">${messages[Math.floor(Math.random() * messages.length)]}</p>`;
+    }
+}
+
+function renderHitCostHighlight(item) {
+    return `
+        <div class="stat-highlight-main">
+            <div class="stat-highlight-icon">💸</div>
+            <div class="stat-highlight-info">
+                <div class="stat-highlight-name">${item.name}</div>
+                <div class="stat-highlight-team">${item.teamName}</div>
+            </div>
+            <div class="stat-highlight-value negative">
+                -${item.value} pts
+            </div>
+        </div>
+        <div class="stat-highlight-detail">${item.transfers} transfers • ${item.detail}</div>
+    `;
+}
+
+function renderStreakList(data) {
+    if (!data || data.length === 0) {
+        return '<p class="no-data">Không có dữ liệu</p>';
+    }
+    
+    return data.map((item, idx) => `
+        <div class="stat-ranking-item">
+            <div class="stat-rank ${idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : ''}">${idx + 1}</div>
+            <div class="stat-player-info">
+                <div class="stat-player-name">${item.name}</div>
+                <div class="stat-player-team">${item.teamName} • Avg: ${item.avgPoints} pts</div>
+            </div>
+            <div class="stat-value">
+                ${item.value} vòng
+            </div>
+        </div>
+    `).join('');
 }

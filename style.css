@@ -660,10 +660,18 @@ header h1 {
         align-items: stretch;
     }
     
-    .awards-main-section .award-item.champion,
-    .awards-main-section .award-item.second,
+    .awards-main-section .award-item.champion {
+        order: 1;
+        min-height: auto;
+    }
+    
+    .awards-main-section .award-item.second {
+        order: 2;
+        min-height: auto;
+    }
+    
     .awards-main-section .award-item.third {
-        order: 0;
+        order: 3;
         min-height: auto;
     }
     
@@ -962,6 +970,40 @@ header h1 {
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 20px;
+}
+
+.info-message {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border: 2px solid #3b82f6;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.info-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.info-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.info-message strong {
+    color: #1e40af;
+    font-size: 1.05rem;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.info-message p {
+    color: #1e3a8a;
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 .hidden {
@@ -1790,21 +1832,46 @@ tbody tr:last-child td {
     }
 
     .settings-link .btn {
+        width: 100%;
+    }
+    
+    /* Fix league header for mobile */
     .league-header {
         flex-direction: column;
         align-items: stretch;
+        gap: 15px;
+    }
+    
+    .league-header-main {
+        width: 100%;
+    }
+    
+    .league-title-row {
+        margin-bottom: 8px;
+    }
+    
+    .league-title-row h2 {
+        font-size: 1.3rem;
+    }
+    
+    .gw-info-inline {
+        flex-wrap: wrap;
+        font-size: 0.85rem;
     }
 
     .league-actions {
         width: 100%;
-        margin-top: 15px;
+        justify-content: space-between;
+        flex-wrap: nowrap;
+    }
+    
+    .gameweek-select-compact {
+        flex: 1;
+        min-width: 0;
     }
 
-    .league-actions .btn {
-        width: 100%;
-    }
-
-        width: 100%;
+    .league-actions .btn-settings {
+        flex-shrink: 0;
     }
 
     .user-display {
@@ -1840,6 +1907,64 @@ tbody tr:last-child td {
 
     th, td {
         padding: 10px 8px;
+    }
+    
+    /* Sticky columns for mobile - keep Rank and Player columns fixed when scrolling horizontally */
+    .table-container {
+        position: relative;
+    }
+    
+    #standingsTable thead tr th:nth-child(1),
+    #standingsTable tbody tr td:nth-child(1) {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        background: var(--primary-color);
+        box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    #standingsTable tbody tr td:nth-child(1) {
+        background: white;
+    }
+    
+    #standingsTable tbody tr:hover td:nth-child(1) {
+        background: #f9fafb;
+    }
+    
+    #standingsTable thead tr th:nth-child(2),
+    #standingsTable tbody tr td:nth-child(2) {
+        position: sticky;
+        left: 70px; /* Width of first column */
+        z-index: 10;
+        background: var(--primary-color);
+        box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    #standingsTable tbody tr td:nth-child(2) {
+        background: white;
+    }
+    
+    #standingsTable tbody tr:hover td:nth-child(2) {
+        background: #f9fafb;
+    }
+    
+    /* Make sure other columns have min-width for better scrolling */
+    #standingsTable th:nth-child(n+3),
+    #standingsTable td:nth-child(n+3) {
+        min-width: 100px;
+    }
+    
+    /* Adjust player cell for mobile */
+    .player-cell {
+        min-width: 140px;
+    }
+    
+    .player-name {
+        font-size: 0.9rem;
+    }
+    
+    .team-name {
+        font-size: 0.75rem;
     }
 
     .stat-value {

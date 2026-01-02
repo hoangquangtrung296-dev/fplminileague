@@ -361,8 +361,8 @@ function clearOldestCaches(prefix) {
         // Sort by key name (older GWs have smaller numbers)
         cacheKeys.sort();
         
-        // Remove oldest 30% of caches
-        const toRemove = Math.ceil(cacheKeys.length * 0.3);
+        // Remove oldest 50% of caches
+        const toRemove = Math.ceil(cacheKeys.length * 0.5);
         for (let i = 0; i < toRemove && i < cacheKeys.length; i++) {
             localStorage.removeItem(cacheKeys[i]);
         }
@@ -422,6 +422,12 @@ function getCachedPicks(entryId, gw) {
 
 function setCachedPicks(entryId, gw, data) {
     try {
+        // Check if data and picks exist
+        if (!data || !data.picks || !Array.isArray(data.picks)) {
+            console.warn(`Không thể cache picks cho entry ${entryId} GW${gw}: dữ liệu không hợp lệ`);
+            return;
+        }
+        
         const cacheKey = `fplCache_picks_${entryId}_gw_${gw}`;
         // Only cache essential data to save space
         const essentialData = {
@@ -440,17 +446,19 @@ function setCachedPicks(entryId, gw, data) {
             // Try to clear old picks caches and retry
             clearOldestCaches('fplCache_picks_');
             try {
-                const cacheKey = `fplCache_picks_${entryId}_gw_${gw}`;
-                const essentialData = {
-                    picks: data.picks.map(p => ({
-                        element: p.element,
-                        position: p.position,
-                        multiplier: p.multiplier,
-                        is_captain: p.is_captain,
-                        is_vice_captain: p.is_vice_captain
-                    }))
-                };
-                localStorage.setItem(cacheKey, JSON.stringify(essentialData));
+                if (data && data.picks && Array.isArray(data.picks)) {
+                    const cacheKey = `fplCache_picks_${entryId}_gw_${gw}`;
+                    const essentialData = {
+                        picks: data.picks.map(p => ({
+                            element: p.element,
+                            position: p.position,
+                            multiplier: p.multiplier,
+                            is_captain: p.is_captain,
+                            is_vice_captain: p.is_vice_captain
+                        }))
+                    };
+                    localStorage.setItem(cacheKey, JSON.stringify(essentialData));
+                }
             } catch (retryError) {
                 // Silently fail - app will work without cache
                 console.error('Không thể lưu cache picks:', retryError.message);
@@ -1143,17 +1151,40 @@ async function loadLeague(leagueId) {
         currentGameweek = currentGW;
         
         // Check if league hasn't started yet
+        let leagueNotStarted = false;
+        let displayGW = currentGW;
         if (leagueStartEvent > currentGW) {
-            showError(`League này bắt đầu từ GW${leagueStartEvent}. Hiện tại mới là GW${currentGW}. Vui lòng quay lại khi league đã bắt đầu.`);
-            hideLoading();
-            return;
+            leagueNotStarted = true;
+            displayGW = leagueStartEvent; // Use start GW for display
+            // Don't return - continue to show standings with 0 points
+            console.log(`League starts at GW${leagueStartEvent}, current is GW${currentGW}`);
         }
         
         // Reset gameweek data for new league
         allGameweeksData = {};
         
-        // Load all entries' history for the current gameweek
-        await loadGameweekData(currentGW);
+        // Load all entries' history for the display gameweek
+        // If league hasn't started, this will create entries with 0 points for the start GW
+        await loadGameweekData(displayGW, leagueNotStarted);
+        
+        // Show info message if league hasn't started
+        if (leagueNotStarted) {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info-message';
+            infoDiv.innerHTML = `
+                <div class="info-content">
+                    <span class="info-icon">ℹ️</span>
+                    <div>
+                        <strong>League chưa bắt đầu</strong>
+                        <p>League này sẽ bắt đầu từ GW${leagueStartEvent}. Hiện tại mới là GW${currentGW}. Đang hiển thị thông tin của GW${displayGW}.</p>
+                    </div>
+                </div>
+            `;
+            const standingsEl = document.getElementById('standings');
+            if (standingsEl) {
+                standingsEl.insertBefore(infoDiv, standingsEl.firstChild);
+            }
+        }
         
         hideLoading();
         
@@ -1163,7 +1194,7 @@ async function loadLeague(leagueId) {
 }
 
 // Load gameweek specific data
-async function loadGameweekData(gameweek) {
+async function loadGameweekData(gameweek, leagueNotStarted = false) {
     showLoading('Đang tải dữ liệu các gameweeks...');
     currentGameweek = gameweek;
     
@@ -1330,6 +1361,28 @@ async function loadGameweekData(gameweek) {
                             });
                         }
                     });
+                    
+                    // If league hasn't started and gwData is empty, create entries with 0 points
+                    if (leagueNotStarted && gwData.length === 0 && standings && standings.length > 0) {
+                        console.log('🔍 League not started, creating entries with 0 points');
+                        standings.forEach(standing => {
+                            gwData.push({
+                                entry: standing.entry,
+                                playerName: standing.player_name,
+                                entryName: standing.entry_name,
+                                gwPoints: 0,
+                                gwPointsGross: 0,
+                                transferCost: 0,
+                                gwTransfers: 0,
+                                totalPoints: 0,
+                                gwRank: standing.rank,
+                                totalTransfers: 0,
+                                captainPoints: null,
+                                vicePoints: null,
+                                benchPoints: null
+                            });
+                        });
+                    }
                     
                     console.log(`🔍 GW${gw} gwData count: ${gwData.length}`);
                     
@@ -2069,6 +2122,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             hideElement('leagueInfo');
             hideElement('standings');
             hideElement('summary');
+            hideElement('error'); // Hide any error messages
             
             // Show league list if we have leagues loaded
             if (userLeagues && userLeagues.length > 0) {
