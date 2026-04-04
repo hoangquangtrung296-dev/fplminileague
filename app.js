@@ -118,12 +118,15 @@ function loadSettings(leagueId = null) {
         leagueId = localStorage.getItem('currentLeagueId');
     }
     
+    // Get league's actual start event from localStorage
+    const leagueStartEvent = parseInt(localStorage.getItem('currentLeagueStartEvent')) || 1;
+    
     if (!leagueId) {
         // No league ID, return default settings
         return {
             maxRanks: 20,
             rankPayments: generateDefaultPayments(20),
-            startGW: 1,
+            startGW: leagueStartEvent, // Use league's start event as default
             endGW: 38,
             prize1st: 0,
             prize2nd: 0,
@@ -140,13 +143,20 @@ function loadSettings(leagueId = null) {
     
     const savedSettings = localStorage.getItem(`fplSettings_${leagueId}`);
     if (savedSettings) {
-        return JSON.parse(savedSettings);
+        const settings = JSON.parse(savedSettings);
+        
+        // If startGW is still default (1) and league actually starts later, use league's start event
+        if (settings.startGW === 1 && leagueStartEvent > 1) {
+            settings.startGW = leagueStartEvent;
+        }
+        
+        return settings;
     }
-    // Default settings
+    // Default settings with league's actual start event
     return {
         maxRanks: 20,
         rankPayments: generateDefaultPayments(20),
-        startGW: 1,
+        startGW: leagueStartEvent, // Use league's start event as default
         endGW: 38,
         prize1st: 0,
         prize2nd: 0,
@@ -1311,11 +1321,35 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                 
                 if (isCompletedGW) {
                     gwData = getCachedGWData(currentLeagueId, gw);
+                    
+                    // Recalculate totalPoints for cached data based on startGW
+                    if (gwData && gwData.length > 0) {
+                        const settings = loadSettings();
+                        const leagueStartGW = settings.startGW || 1;
+                        
+                        gwData.forEach(entry => {
+                            const entryData = allEntriesHistory[entry.entry];
+                            if (entryData && entryData.history) {
+                                let totalPointsFromStart = 0;
+                                entryData.history.forEach(h => {
+                                    if (h.event >= leagueStartGW && h.event <= gw) {
+                                        const eventPoints = h.points - (h.event_transfers_cost || 0);
+                                        totalPointsFromStart += eventPoints;
+                                    }
+                                });
+                                entry.totalPoints = totalPointsFromStart;
+                            }
+                        });
+                    }
                 }
                 
                 if (!gwData) {
                     // Build gwData from history
                     gwData = [];
+                    
+                    // Load settings to get startGW
+                    const settings = loadSettings();
+                    const leagueStartGW = settings.startGW || 1;
                     
                     Object.keys(allEntriesHistory).forEach(entryId => {
                         const entryData = allEntriesHistory[entryId];
@@ -1336,6 +1370,16 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                                 }
                             });
                             
+                            // Calculate totalPoints from league startGW to current GW
+                            let totalPointsFromStart = 0;
+                            entryData.history.forEach(h => {
+                                if (h.event >= leagueStartGW && h.event <= gw) {
+                                    // Add points after transfer cost
+                                    const eventPoints = h.points - (h.event_transfers_cost || 0);
+                                    totalPointsFromStart += eventPoints;
+                                }
+                            });
+                            
                             // Calculate GW points after deducting transfer cost
                             // gwHistory.points is points BEFORE transfer cost
                             // gwHistory.event_transfers_cost is the transfer cost (e.g., 4, 8, etc.)
@@ -1351,7 +1395,7 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                                 gwPointsGross: gwHistory.points, // Points BEFORE transfer cost (for reference)
                                 transferCost: transferCost, // Transfer cost for this GW
                                 gwTransfers: gwTransfers, // Number of transfers this GW
-                                totalPoints: gwHistory.total_points,
+                                totalPoints: totalPointsFromStart, // Total points from startGW to current GW
                                 gwRank: gwHistory.rank,
                                 totalTransfers: totalTransfers,
                                 // Tiebreaker stats will be loaded on-demand

@@ -7,10 +7,13 @@ async function loadSettings(leagueId = null) {
     
     const playerCount = parseInt(localStorage.getItem('currentLeaguePlayerCount')) || 20;
     
+    // Get league's actual start event from localStorage
+    const leagueStartEvent = parseInt(localStorage.getItem('currentLeagueStartEvent')) || 1;
+    
     const defaultSettings = {
         maxRanks: playerCount,
         rankPayments: generateDefaultPayments(playerCount),
-        startGW: 1,
+        startGW: leagueStartEvent, // Use league's start event as default
         endGW: 38,
         prize1st: 0,
         prize2nd: 0,
@@ -32,7 +35,14 @@ async function loadSettings(leagueId = null) {
     // First check localStorage
     const savedSettings = localStorage.getItem(`fplSettings_${leagueId}`);
     if (savedSettings) {
-        return JSON.parse(savedSettings);
+        const settings = JSON.parse(savedSettings);
+        
+        // If startGW is still default (1) and league actually starts later, use league's start event
+        if (settings.startGW === 1 && leagueStartEvent > 1) {
+            settings.startGW = leagueStartEvent;
+        }
+        
+        return settings;
     }
     
     // Try to load from default_settings.json
@@ -44,7 +54,14 @@ async function loadSettings(leagueId = null) {
                 console.log(`Loaded default settings for league ${leagueId} from file`);
                 const fileSettings = defaultSettingsFile[leagueId];
                 // Merge with default settings to ensure all fields exist
-                return { ...defaultSettings, ...fileSettings, maxRanks: playerCount };
+                const mergedSettings = { ...defaultSettings, ...fileSettings, maxRanks: playerCount };
+                
+                // If startGW is still default (1) and league actually starts later, use league's start event
+                if (mergedSettings.startGW === 1 && leagueStartEvent > 1) {
+                    mergedSettings.startGW = leagueStartEvent;
+                }
+                
+                return mergedSettings;
             }
         }
     } catch (e) {
@@ -736,10 +753,14 @@ document.getElementById('settingsForm').addEventListener('submit', (e) => {
 document.getElementById('resetBtn').addEventListener('click', () => {
     if (confirm('Bạn có chắc muốn đặt lại về cài đặt mặc định?')) {
         const playerCount = parseInt(document.getElementById('playerCount').value);
+        
+        // Get league's actual start event from localStorage
+        const leagueStartEvent = parseInt(localStorage.getItem('currentLeagueStartEvent')) || 1;
+        
         const defaultSettings = {
             maxRanks: playerCount,
             rankPayments: generateDefaultPayments(playerCount),
-            startGW: 1,
+            startGW: leagueStartEvent, // Use league's start event as default
             endGW: 38,
             prize1st: 0,
             prize2nd: 0,
