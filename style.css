@@ -1713,6 +1713,35 @@ tbody tr:last-child td {
     line-height: 1.6;
 }
 
+/* Footer */
+.app-footer {
+    text-align: center;
+    padding: 20px;
+    margin-top: 40px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.app-footer .version-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.app-footer .version-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.app-footer .app-version {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
 .league-selector {
     margin-bottom: 30px;
 }
