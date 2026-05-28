@@ -1333,7 +1333,9 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                                 let totalPointsFromStart = 0;
                                 entryData.history.forEach(h => {
                                     if (h.event >= leagueStartGW && h.event <= gw) {
-                                        const eventPoints = h.points - (h.event_transfers_cost || 0);
+                                        // FPL rule: transfer cost is NOT deducted on the league's first GW
+                                        const transferCostThisGW = h.event === leagueStartGW ? 0 : (h.event_transfers_cost || 0);
+                                        const eventPoints = h.points - transferCostThisGW;
                                         totalPointsFromStart += eventPoints;
                                     }
                                 });
@@ -1374,8 +1376,9 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                             let totalPointsFromStart = 0;
                             entryData.history.forEach(h => {
                                 if (h.event >= leagueStartGW && h.event <= gw) {
-                                    // Add points after transfer cost
-                                    const eventPoints = h.points - (h.event_transfers_cost || 0);
+                                    // FPL rule: transfer cost is NOT deducted on the league's first GW
+                                    const transferCostThisGW = h.event === leagueStartGW ? 0 : (h.event_transfers_cost || 0);
+                                    const eventPoints = h.points - transferCostThisGW;
                                     totalPointsFromStart += eventPoints;
                                 }
                             });
@@ -1383,7 +1386,8 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                             // Calculate GW points after deducting transfer cost
                             // gwHistory.points is points BEFORE transfer cost
                             // gwHistory.event_transfers_cost is the transfer cost (e.g., 4, 8, etc.)
-                            const transferCost = gwHistory.event_transfers_cost || 0;
+                            // FPL rule: transfer cost is NOT deducted on the league's first GW
+                            const transferCost = gw === leagueStartGW ? 0 : (gwHistory.event_transfers_cost || 0);
                             const gwTransfers = gwHistory.event_transfers || 0; // Number of transfers this GW
                             const gwPointsNet = gwHistory.points - transferCost;
                             
