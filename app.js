@@ -1342,6 +1342,51 @@ async function loadGameweekData(gameweek, leagueNotStarted = false) {
                                 entry.totalPoints = totalPointsFromStart;
                             }
                         });
+                        
+                        // Add missing entries (players who joined after cache was built)
+                        const settings2 = loadSettings();
+                        const leagueStartGW2 = settings2.startGW || 1;
+                        const cachedEntryIds = new Set(gwData.map(e => e.entry));
+                        Object.keys(allEntriesHistory).forEach(entryId => {
+                            const numericId = parseInt(entryId);
+                            if (cachedEntryIds.has(numericId)) return; // already in cache
+                            
+                            const entryData = allEntriesHistory[entryId];
+                            if (!entryData || !entryData.history || !Array.isArray(entryData.history)) return;
+                            
+                            const gwHistory = entryData.history.find(h => h.event === gw);
+                            if (!gwHistory) return;
+                            
+                            let totalTransfers = 0;
+                            entryData.history.forEach(h => {
+                                if (h.event <= gw) totalTransfers += h.event_transfers || 0;
+                            });
+                            
+                            let totalPointsFromStart = 0;
+                            entryData.history.forEach(h => {
+                                if (h.event >= leagueStartGW2 && h.event <= gw) {
+                                    const transferCostThisGW = h.event === leagueStartGW2 ? 0 : (h.event_transfers_cost || 0);
+                                    totalPointsFromStart += h.points - transferCostThisGW;
+                                }
+                            });
+                            
+                            const transferCost = gw === leagueStartGW2 ? 0 : (gwHistory.event_transfers_cost || 0);
+                            gwData.push({
+                                entry: numericId,
+                                playerName: entryData.playerName,
+                                entryName: entryData.entryName,
+                                gwPoints: gwHistory.points - transferCost,
+                                gwPointsGross: gwHistory.points,
+                                transferCost: transferCost,
+                                gwTransfers: gwHistory.event_transfers || 0,
+                                totalPoints: totalPointsFromStart,
+                                gwRank: gwHistory.rank,
+                                totalTransfers: totalTransfers,
+                                captainPoints: null,
+                                vicePoints: null,
+                                benchPoints: null
+                            });
+                        });
                     }
                 }
                 
