@@ -932,12 +932,12 @@ function renderTotalPointsChart() {
         gwLabels.push(`GW${gw}`);
     }
     
-    // Generate distinct colors for each player - muted professional palette
+    // 20 maximally distinct colors spread across the hue wheel
     const colors = [
-        '#c0392b', '#27ae60', '#2980b9', '#8e44ad', '#d35400',
-        '#16a085', '#2c3e50', '#7f8c8d', '#c0392b', '#1a5276',
-        '#6c3483', '#1e8449', '#784212', '#154360', '#4a235a',
-        '#0e6655', '#283747', '#7b241c', '#1f618d', '#4d5656'
+        '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+        '#42d4f4', '#f032e6', '#9a6324', '#469990', '#e6beff',
+        '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075',
+        '#a9a9a9', '#008080', '#e05c5c', '#5c7a5c', '#7c5cbf'
     ];
 
     // Find last non-null index for each entry (for end labels)
