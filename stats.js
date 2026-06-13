@@ -290,7 +290,8 @@ async function fetchAllEntryData(entries) {
     });
     
     // Fetch live data for each GW to get player points (for captain calculation)
-    for (let gw = 1; gw <= currentGameweek; gw++) {
+    const leagueStartGW = parseInt(localStorage.getItem('currentLeagueStartEvent')) || 1;
+    for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
         updateProgress(`Đang tải dữ liệu GW ${gw}...`);
         const liveCacheKey = `live_${gw}`;
         let liveData = getAppCache(liveCacheKey);
@@ -319,7 +320,7 @@ async function fetchAllEntryData(entries) {
     updateProgress('Đang tải đội hình các manager...');
     const picksToFetch = [];
     for (const entry of entries) {
-        for (let gw = 1; gw <= currentGameweek; gw++) {
+        for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
             const cacheKey = `picks_${entry.entry}_${gw}`;
             const cached = getAppCache(cacheKey);
             if (cached) {
@@ -382,15 +383,17 @@ function calculateAllStats(entries) {
         longestStreak: [] // NEW: Longest above-average streak
     };
     
+    const leagueStartGW = parseInt(localStorage.getItem('currentLeagueStartEvent')) || 1;
+
     // Calculate GW scores for each entry to find winners/losers
     const gwScores = {};
-    for (let gw = 1; gw <= currentGameweek; gw++) {
+    for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
         gwScores[gw] = [];
     }
     
     // First pass: collect all GW data for league ranking calculation
     const allGWData = {}; // {gw: [{entry, totalPoints, name, teamName}]}
-    for (let gw = 1; gw <= currentGameweek; gw++) {
+    for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
         allGWData[gw] = [];
     }
     
@@ -398,7 +401,7 @@ function calculateAllStats(entries) {
         const data = allStats[entry.entry];
         if (!data || !data.history) return;
         
-        const history = data.history.current || [];
+        const history = (data.history.current || []).filter(h => h.event >= leagueStartGW);
         let cumulativePoints = 0;
         
         history.forEach(gwData => {
@@ -417,7 +420,7 @@ function calculateAllStats(entries) {
     
     // Calculate league rankings for each GW
     const leagueRankings = {}; // {gw: {entryId: rank}}
-    for (let gw = 1; gw <= currentGameweek; gw++) {
+    for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
         const gwData = allGWData[gw];
         // Sort by total points descending
         gwData.sort((a, b) => b.totalPoints - a.totalPoints);
@@ -435,7 +438,7 @@ function calculateAllStats(entries) {
         const data = allStats[entry.entry];
         if (!data || !data.history) return;
         
-        const history = data.history.current || [];
+        const history = (data.history.current || []).filter(h => h.event >= leagueStartGW);
         let totalBenchPoints = 0;
         let totalTransfers = 0;
         let gwPointsArray = [];
@@ -477,7 +480,7 @@ function calculateAllStats(entries) {
             }
             
             // League rank changes (based on mini league ranking)
-            if (gw.event > 1 && leagueRankings[gw.event] && leagueRankings[gw.event - 1]) {
+            if (gw.event > leagueStartGW && leagueRankings[gw.event] && leagueRankings[gw.event - 1]) {
                 const currentRank = leagueRankings[gw.event][entry.entry];
                 const prevRank = leagueRankings[gw.event - 1][entry.entry];
                 
@@ -720,6 +723,7 @@ function calculateAllStats(entries) {
         
         if (data && data.picks && allStats.liveData) {
             Object.keys(data.picks).forEach(gw => {
+                if (parseInt(gw) < leagueStartGW) return; // skip GWs before league start
                 const gwPicks = data.picks[gw];
                 if (gwPicks && gwPicks.picks) {
                     const captainPick = gwPicks.picks.find(p => p.is_captain);
