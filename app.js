@@ -24,16 +24,18 @@ if (window.FORCE_LOCAL_MODE === true) {
 
 // Configure proxies based on environment
 const CORS_PROXIES = isLocalFile ? [
-    // For local file:// - CodeTabs works best, try it first
-    { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
+    // For local file:// - try cors.eu.org first (confirmed working)
+    { url: 'https://cors.eu.org/', needsEncode: false },
     { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
+    { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
     { url: 'https://corsproxy.io/?', needsEncode: false }
 ] : [
-    // For http/https - try direct first
+    // For http/https - try direct first, then cors.eu.org
     { url: '', needsEncode: false }, // Direct (no proxy)
+    { url: 'https://cors.eu.org/', needsEncode: false },
+    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
-    { url: 'https://corsproxy.io/?', needsEncode: false },
-    { url: 'https://api.allorigins.win/raw?url=', needsEncode: true }
+    { url: 'https://corsproxy.io/?', needsEncode: false }
 ];
 
 // Helper to fetch with optional CORS proxy
