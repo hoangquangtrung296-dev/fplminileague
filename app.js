@@ -64,7 +64,7 @@ async function fetchWithProxy(endpoint, tryProxies = true) {
             
             // Add timeout to prevent hanging
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
             
             try {
                 const response = await fetch(url, {
@@ -87,7 +87,7 @@ async function fetchWithProxy(endpoint, tryProxies = true) {
             } catch (fetchErr) {
                 clearTimeout(timeoutId);
                 if (fetchErr.name === 'AbortError') {
-                    console.log(`⏱️ Timeout (5s) with ${proxyName}`);
+                    console.log(`⏱️ Timeout (15s) with ${proxyName}`);
                 } else {
                     throw fetchErr;
                 }
@@ -279,9 +279,12 @@ function showError(message) {
 async function fetchEntryData(entryId) {
     try {
         const data = await fetchWithProxy(`/entry/${entryId}/`);
+        if (!data) {
+            throw new Error(`Không thể kết nối đến FPL API. Tất cả proxy đều thất bại hoặc timeout. Vui lòng thử lại sau.`);
+        }
         return data;
     } catch (error) {
-        throw new Error(`Lỗi kết nối: ${error.message}`);
+        throw new Error(error.message || `Lỗi kết nối: ${error}`);
     }
 }
 
