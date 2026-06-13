@@ -489,8 +489,9 @@
 .chart-container {
     position: relative;
     width: 100%;
-    height: 550px;
+    height: 650px;
     margin-top: 15px;
+    padding-right: 130px; /* space for end labels */
 }
 
 .chart-container canvas {
@@ -528,7 +529,8 @@
     }
     
     .chart-container {
-        height: 300px;
+        height: 380px;
+        padding-right: 100px;
     }
 }
 
@@ -557,6 +559,7 @@
     }
     
     .chart-container {
-        height: 250px;
+        height: 300px;
+        padding-right: 80px;
     }
 }

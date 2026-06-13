@@ -932,34 +932,52 @@ function renderTotalPointsChart() {
         gwLabels.push(`GW${gw}`);
     }
     
-    // Generate distinct colors for each player
+    // Generate distinct colors for each player - vibrant palette
     const colors = [
-        '#37003c', '#00ff85', '#ff2882', '#04f5ff', '#e90052',
-        '#38003c', '#00a650', '#963cff', '#ff6b00', '#00d4ff',
-        '#6b21a8', '#059669', '#dc2626', '#2563eb', '#ca8a04',
-        '#be185d', '#0891b2', '#65a30d', '#9333ea', '#ea580c'
+        '#e90052', '#00a650', '#04f5ff', '#ff6b00', '#963cff',
+        '#2563eb', '#dc2626', '#059669', '#ca8a04', '#0891b2',
+        '#9333ea', '#65a30d', '#be185d', '#ea580c', '#6b21a8',
+        '#0284c7', '#16a34a', '#b91c1c', '#7c3aed', '#d97706'
     ];
-    
+
+    // Find last non-null index for each entry (for end labels)
     const datasets = entries.map((entry, idx) => {
         const data = [];
         for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
             if (leagueRankings[gw] && leagueRankings[gw][entry.entry]) {
-                // Get ranking position (1 = first, 2 = second, etc.)
                 data.push(leagueRankings[gw][entry.entry]);
             } else {
                 data.push(null);
             }
         }
-        
+        const lastNonNullIdx = data.reduce((acc, v, i) => v !== null ? i : acc, -1);
+
         return {
             label: entry.player_name,
             data: data,
             borderColor: colors[idx % colors.length],
             backgroundColor: colors[idx % colors.length],
-            tension: 0.3,
-            pointRadius: 3,
-            pointHoverRadius: 6,
-            borderWidth: 2
+            tension: 0.35,
+            pointRadius: data.map((_, i) => i === lastNonNullIdx ? 6 : 3),
+            pointHoverRadius: 8,
+            pointBorderWidth: data.map((_, i) => i === lastNonNullIdx ? 2 : 1),
+            pointBorderColor: '#fff',
+            borderWidth: 2.5,
+            spanGaps: false,
+            datalabels: {
+                display: (ctx) => ctx.dataIndex === lastNonNullIdx,
+                align: 'right',
+                anchor: 'end',
+                offset: 6,
+                color: colors[idx % colors.length],
+                font: {
+                    family: "'Inter', sans-serif",
+                    size: 11,
+                    weight: '600'
+                },
+                formatter: () => entry.player_name,
+                clip: false
+            }
         };
     });
     
@@ -967,7 +985,10 @@ function renderTotalPointsChart() {
     if (window.positionChartInstance) {
         window.positionChartInstance.destroy();
     }
-    
+
+    // Register datalabels plugin
+    Chart.register(ChartDataLabels);
+
     window.positionChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -977,75 +998,72 @@ function renderTotalPointsChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    right: 10,
+                    top: 10,
+                    bottom: 10
+                }
+            },
             interaction: {
                 mode: 'index',
                 intersect: false
             },
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        padding: 15,
-                        font: {
-                            family: "'Inter', sans-serif",
-                            size: 11
+                    display: false // Hidden — names shown on chart directly
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 10, 40, 0.92)',
+                    titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
+                    bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                    padding: 12,
+                    cornerRadius: 10,
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    callbacks: {
+                        title: (items) => items[0].label,
+                        label: (context) => {
+                            const rank = context.parsed.y;
+                            return `  ${context.dataset.label}: Hạng ${rank}`;
                         }
                     }
                 },
-                tooltip: {
-                    backgroundColor: 'rgba(55, 0, 60, 0.9)',
-                    titleFont: {
-                        family: "'Inter', sans-serif",
-                        size: 13
-                    },
-                    bodyFont: {
-                        family: "'Inter', sans-serif",
-                        size: 12
-                    },
-                    callbacks: {
-                        label: function(context) {
-                            const rank = context.parsed.y;
-                            return `${context.dataset.label}: Hạng ${rank}`;
-                        }
-                    }
+                datalabels: {
+                    // Default off; overridden per dataset
+                    display: false
                 }
             },
             scales: {
                 y: {
-                    reverse: true, // Reverse so rank 1 is at top
+                    reverse: true,
                     beginAtZero: false,
+                    min: 1,
                     ticks: {
                         stepSize: 1,
-                        font: {
-                            family: "'Inter', sans-serif"
-                        },
-                        callback: function(value) {
-                            return value; // Show rank numbers
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Hạng',
-                        font: {
-                            family: "'Inter', sans-serif",
-                            weight: 600
-                        }
+                        font: { family: "'Inter', sans-serif", size: 12 },
+                        color: '#666',
+                        callback: (value) => `Hạng ${value}`
                     },
                     grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
+                        color: 'rgba(0,0,0,0.06)',
+                        drawBorder: false
+                    },
+                    border: { dash: [4, 4] }
                 },
                 x: {
                     ticks: {
-                        font: {
-                            family: "'Inter', sans-serif"
-                        }
+                        font: { family: "'Inter', sans-serif", size: 11 },
+                        color: '#888',
+                        maxRotation: 45
                     },
-                    grid: {
-                        display: false
-                    }
+                    grid: { display: false },
+                    border: { color: 'rgba(0,0,0,0.1)' }
                 }
+            },
+            animation: {
+                duration: 600,
+                easing: 'easeInOutQuart'
             }
         }
     });
