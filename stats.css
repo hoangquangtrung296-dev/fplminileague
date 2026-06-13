@@ -491,11 +491,13 @@
     width: 100%;
     height: 650px;
     margin-top: 15px;
-    padding-right: 130px; /* space for end labels */
+    padding-right: 160px; /* space for end labels */
+    overflow: visible;
 }
 
 .chart-container canvas {
     max-width: 100%;
+    overflow: visible;
 }
 
 /* Responsive */
@@ -530,7 +532,8 @@
     
     .chart-container {
         height: 380px;
-        padding-right: 100px;
+        padding-right: 120px;
+        overflow: visible;
     }
 }
 
@@ -560,6 +563,7 @@
     
     .chart-container {
         height: 300px;
-        padding-right: 80px;
+        padding-right: 90px;
+        overflow: visible;
     }
 }

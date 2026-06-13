@@ -968,7 +968,7 @@ function renderTotalPointsChart() {
                 display: (ctx) => ctx.dataIndex === lastNonNullIdx,
                 align: 'right',
                 anchor: 'end',
-                offset: 6,
+                offset: 8,
                 color: colors[idx % colors.length],
                 font: {
                     family: "'Inter', sans-serif",
@@ -976,7 +976,8 @@ function renderTotalPointsChart() {
                     weight: '600'
                 },
                 formatter: () => entry.player_name,
-                clip: false
+                clip: false,
+                clamp: false
             }
         };
     });
@@ -998,11 +999,13 @@ function renderTotalPointsChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            clip: false,
             layout: {
                 padding: {
-                    right: 10,
-                    top: 10,
-                    bottom: 10
+                    right: 140,
+                    top: 20,
+                    bottom: 10,
+                    left: 10
                 }
             },
             interaction: {
