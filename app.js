@@ -663,6 +663,12 @@ async function loadUserLeagues(entryId, skipLeagueList = false) {
         const userData = await fetchEntryData(entryId);
         console.log('User data loaded:', userData);
         
+        if (!userData || !userData.leagues) {
+            showError(`Không tìm thấy dữ liệu cho ID ${entryId}. Vui lòng kiểm tra lại ID hoặc thử lại sau.`);
+            hideLoading();
+            return;
+        }
+        
         // Load both classic and H2H leagues with type markers
         userLeagues = [
             ...(userData.leagues.classic || []).map(l => ({...l, type: 'classic'})),
