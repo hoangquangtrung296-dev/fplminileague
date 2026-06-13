@@ -153,8 +153,9 @@ function displayHallOfFame() {
     const currentYear = new Date().getFullYear();
     
     // Keep original order from settings (no sorting)
-    hallOfFameEl.innerHTML = history.map(h => {
-        const isCurrentChampion = parseInt(h.year) === currentYear || parseInt(h.year) === currentYear - 1;
+    // Only the last entry is the current champion
+    hallOfFameEl.innerHTML = history.map((h, idx) => {
+        const isCurrentChampion = idx === history.length - 1;
         return `
         <div class="champion-card${isCurrentChampion ? ' current-champion' : ''}">
             <div class="champion-trophy">🏆</div>
