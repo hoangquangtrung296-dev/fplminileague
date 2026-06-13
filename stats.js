@@ -923,9 +923,11 @@ function renderTotalPointsChart() {
     const ctx = document.getElementById('positionChart');
     if (!ctx) return;
     
+    const leagueStartGW = parseInt(localStorage.getItem('currentLeagueStartEvent')) || 1;
+    
     // Prepare data for chart (now showing rankings instead of points)
     const gwLabels = [];
-    for (let gw = 1; gw <= currentGameweek; gw++) {
+    for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
         gwLabels.push(`GW${gw}`);
     }
     
@@ -939,7 +941,7 @@ function renderTotalPointsChart() {
     
     const datasets = entries.map((entry, idx) => {
         const data = [];
-        for (let gw = 1; gw <= currentGameweek; gw++) {
+        for (let gw = leagueStartGW; gw <= currentGameweek; gw++) {
             if (leagueRankings[gw] && leagueRankings[gw][entry.entry]) {
                 // Get ranking position (1 = first, 2 = second, etc.)
                 data.push(leagueRankings[gw][entry.entry]);
