@@ -1,6 +1,15 @@
 module.exports = async function handler(req, res) {
+  // Log incoming request for debugging
+  console.log('[Catch-all Handler]', {
+    method: req.method,
+    url: req.url,
+    pathname: new URL(req.url, 'https://example.com').pathname,
+    query: req.query
+  });
+
   // Only handle /api/fpl/* routes
-  if (!req.url.startsWith('/api/fpl')) {
+  const url = new URL(req.url, 'https://example.com');
+  if (!req.url.includes('/api/fpl') && !url.pathname.includes('/api/fpl')) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
@@ -20,7 +29,6 @@ module.exports = async function handler(req, res) {
 
   try {
     // Extract path after /api/fpl
-    const url = new URL(req.url, 'https://example.com');
     let fplPath = url.pathname.replace(/^\/api\/fpl\/?/, '');
     
     // Ensure path starts with /
@@ -36,7 +44,7 @@ module.exports = async function handler(req, res) {
     
     const upstreamUrl = `https://fantasy.premierleague.com/api${fplPath}${queryString}`;
 
-    console.log(`[FPL Proxy] Path: ${fplPath}, URL: ${upstreamUrl}`);
+    console.log(`[FPL Proxy] Extracted path: ${fplPath}, Full URL: ${upstreamUrl}`);
 
     const upstreamResponse = await fetch(upstreamUrl, {
       method: 'GET',
