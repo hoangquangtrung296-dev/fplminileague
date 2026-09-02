@@ -1,5 +1,6 @@
 // FPL API URLs
 const API_BASE = 'https://fantasy.premierleague.com/api';
+const SERVER_PROXY_BASE = '/api/fpl';
 
 // Detect if running locally (file://) or on server (http/https)
 // Allow override via URL parameter: ?mode=local or ?mode=server
@@ -16,22 +17,23 @@ if (window.FORCE_LOCAL_MODE === true) {
     console.log('🔧 FORCED LOCAL MODE (via URL parameter - proxy-first)');
 } else if (forceMode === 'server') {
     isLocalFile = false;
-    console.log('🔧 FORCED SERVER MODE (via URL parameter - direct-first)');
+    console.log('🔧 FORCED SERVER MODE (via URL parameter - same-origin proxy first)');
 } else {
     isLocalFile = window.location.protocol === 'file:';
     console.log(`🔧 AUTO-DETECT MODE: ${isLocalFile ? 'Local file (file://)' : 'Web server (http/https)'}`);
 }
 
-// Configure proxies based on environment
+// Configure proxies based on environment.
+// Public CORS proxies are flaky and often rate-limited. On a served app, a same-origin
+// proxy is the most reliable option because the browser sees a normal same-origin request.
 const CORS_PROXIES = isLocalFile ? [
-    // For local file:// - try cors.eu.org first (confirmed working)
     { url: 'https://cors.eu.org/', needsEncode: false },
     { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
     { url: 'https://corsproxy.io/?', needsEncode: false }
 ] : [
-    // For http/https - try direct first, then cors.eu.org
-    { url: '', needsEncode: false }, // Direct (no proxy)
+    { url: SERVER_PROXY_BASE, needsEncode: false },
+    { url: '', needsEncode: false },
     { url: 'https://cors.eu.org/', needsEncode: false },
     { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
@@ -41,33 +43,39 @@ const CORS_PROXIES = isLocalFile ? [
 // Helper to fetch with optional CORS proxy
 async function fetchWithProxy(endpoint, tryProxies = true) {
     const fullUrl = `${API_BASE}${endpoint}`;
-    
+
     console.log(`📡 Fetching: ${endpoint}`);
     console.log(`🔧 Environment: ${isLocalFile ? 'Local file (file://)' : 'Web server (http/https)'}`);
-    
-    // Try each proxy in order
-    for (let i = 0; i < CORS_PROXIES.length; i++) {
+
+    const proxies = tryProxies ? CORS_PROXIES : [{ url: '', needsEncode: false }];
+
+    for (let i = 0; i < proxies.length; i++) {
         try {
-            const proxyConfig = CORS_PROXIES[i];
+            const proxyConfig = proxies[i];
             const proxy = proxyConfig.url;
-            
-            // Build URL based on whether proxy needs encoding
+
             let url;
             if (!proxy) {
-                url = fullUrl; // Direct
+                url = fullUrl;
             } else if (proxyConfig.needsEncode) {
                 url = `${proxy}${encodeURIComponent(fullUrl)}`;
+            } else if (proxy === SERVER_PROXY_BASE) {
+                url = `${SERVER_PROXY_BASE}${endpoint}`;
             } else {
                 url = `${proxy}${fullUrl}`;
             }
-            
-            const proxyName = !proxy ? 'Direct API' : proxy.includes('allorigins') ? 'AllOrigins' : proxy.includes('corsproxy') ? 'CorsProxy' : 'CodeTabs';
-            console.log(`⏳ Attempt ${i + 1}/${CORS_PROXIES.length}: ${proxyName}`);
-            
-            // Add timeout to prevent hanging
+
+            const proxyName = !proxy ? 'Direct API' :
+                proxy === SERVER_PROXY_BASE ? 'Same-origin proxy' :
+                proxy.includes('allorigins') ? 'AllOrigins' :
+                proxy.includes('corsproxy') ? 'CorsProxy' :
+                proxy.includes('cors.eu.org') ? 'CorsEU' :
+                'CodeTabs';
+            console.log(`⏳ Attempt ${i + 1}/${proxies.length}: ${proxyName}`);
+
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-            
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
             try {
                 const response = await fetch(url, {
                     method: 'GET',
@@ -76,15 +84,15 @@ async function fetchWithProxy(endpoint, tryProxies = true) {
                     },
                     signal: controller.signal
                 });
-                
+
                 clearTimeout(timeoutId);
-                
+
                 if (response.ok) {
                     const data = await response.json();
                     console.log(`✅ SUCCESS with ${proxyName}!`);
                     return data;
                 }
-                
+
                 console.log(`❌ Failed: ${response.status} ${response.statusText}`);
             } catch (fetchErr) {
                 clearTimeout(timeoutId);
@@ -98,9 +106,9 @@ async function fetchWithProxy(endpoint, tryProxies = true) {
             console.log(`❌ Error: ${err.message}`);
         }
     }
-    
+
     console.error('❌ All fetch attempts failed for:', endpoint);
-    return null; // Return null instead of throwing
+    return null;
 }
 
 // App state

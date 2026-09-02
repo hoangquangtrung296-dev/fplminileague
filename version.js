@@ -1,6 +1,6 @@
 // Version configuration
-const APP_VERSION = '1.0.0';
-const BUILD_DATE = '2026-04-04';
+const APP_VERSION = '1.0.1';
+const BUILD_DATE = '2026-09-02';
 
 // Display version in footer
 function displayVersion() {
