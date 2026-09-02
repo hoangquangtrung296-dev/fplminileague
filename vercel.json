@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/fpl/(.*)",
+      "destination": "/api/fpl/$1"
+    }
+  ]
+}
