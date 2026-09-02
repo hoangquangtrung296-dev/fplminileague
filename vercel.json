@@ -1,8 +1,4 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/fpl/(.*)",
-      "destination": "/api/fpl/$1"
-    }
-  ]
+  "cleanUrls": true,
+  "trailingSlash": false
 }
