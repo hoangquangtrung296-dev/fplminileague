@@ -13,6 +13,14 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // Debug logging
+    console.log('[FPL Proxy Debug]', {
+      method: req.method,
+      url: req.url,
+      query: req.query,
+      pathname: new URL(req.url, 'https://example.com').pathname
+    });
+
     // Handle Vercel's catch-all routing for [...path]
     // req.query.path is an array of path segments
     let rawPath = '';
@@ -42,7 +50,7 @@ module.exports = async function handler(req, res) {
     
     const upstreamUrl = `https://fantasy.premierleague.com/api${rawPath}${queryString}`;
 
-    console.log(`[FPL Proxy] Path: ${rawPath}, URL: ${upstreamUrl}`);
+    console.log(`[FPL Proxy] Final - rawPath: ${rawPath}, URL: ${upstreamUrl}`);
 
     const upstreamResponse = await fetch(upstreamUrl, {
       method: 'GET',
