@@ -27,6 +27,11 @@
             </div>
         </header>
 
+        <!-- Shared Mode Banner -->
+        <div id="sharedModeBanner" class="shared-banner hidden">
+            🔗 <span id="sharedBannerText">Đang xem league với config được chia sẻ</span>
+        </div>
+
         <div class="controls" id="entryInputSection">
             <div class="input-group">
                 <label for="entryId">User ID (Entry ID):</label>
@@ -64,6 +69,8 @@
                     </select>
                     <a href="stats.html" class="btn btn-settings" title="Thống kê">📊</a>
                     <a href="settings.html" class="btn btn-settings" title="Cài đặt số tiền">⚙️</a>
+                    <button id="shareLeagueBtn" class="btn btn-share" title="Chia sẻ League">🔗</button>
+                    <button id="editSharedConfigBtn" class="btn btn-settings hidden" title="Chỉnh sửa config được chia sẻ">✏️ Sửa config</button>
                 </div>
             </div>
         </div>
@@ -157,6 +164,51 @@
                     <div class="stat-label">Số người chơi</div>
                     <div class="stat-value" id="totalPlayers">0</div>
                 </div>
+            </div>
+        </div>
+        <!-- Share League Modal -->
+        <div id="shareModal" class="modal-overlay hidden">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <h3>🔗 Chia sẻ League</h3>
+                    <button class="modal-close" id="closeShareModal">✕</button>
+                </div>
+                <p id="shareModalLeagueName" class="modal-league-name"></p>
+
+                <div id="shareStep1">
+                    <div class="modal-field">
+                        <label>🔒 Đặt mật khẩu để bảo vệ quyền chỉnh sửa:</label>
+                        <input type="password" id="sharePassword" placeholder="Nhập mật khẩu (tối thiểu 4 ký tự)..." autocomplete="new-password">
+                        <small class="modal-hint">⚠️ Hãy ghi nhớ mật khẩu này. Cần nhập lại khi muốn chỉnh sửa config về sau.</small>
+                    </div>
+                    <p id="shareStep1Error" class="modal-error hidden"></p>
+                    <button class="btn btn-primary btn-full" id="createShareLinkBtn">Tạo Share Link</button>
+                </div>
+
+                <div id="shareStep2" class="hidden">
+                    <p class="modal-success">✅ Share link đã được tạo thành công!</p>
+                    <div class="copy-group">
+                        <input type="text" id="shareLinkInput" readonly>
+                        <button class="btn btn-secondary" id="copyShareLinkBtn">📋 Copy</button>
+                    </div>
+                    <p class="modal-hint">Gửi link này cho người muốn xem league. Họ sẽ xem league với đúng config này mà không cần nhập Entry ID.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Shared Config Modal -->
+        <div id="editModal" class="modal-overlay hidden">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <h3>✏️ Chỉnh sửa Config</h3>
+                    <button class="modal-close" id="closeEditModal">✕</button>
+                </div>
+                <div class="modal-field">
+                    <label>🔒 Nhập mật khẩu để tiếp tục chỉnh sửa:</label>
+                    <input type="password" id="editPassword" placeholder="Nhập mật khẩu..." autocomplete="current-password">
+                </div>
+                <p id="editModalError" class="modal-error hidden"></p>
+                <button class="btn btn-primary btn-full" id="confirmEditBtn">Xác nhận</button>
             </div>
         </div>
     </div>

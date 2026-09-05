@@ -647,8 +647,8 @@ function showSaveMessage() {
 }
 
 // Initialize page
-async function initializePage() {
-    const settings = await loadSettings();
+async function initializePage(preloadedSettings = null) {
+    const settings = preloadedSettings || await loadSettings();
     
     // Load league info from localStorage
     const leagueId = localStorage.getItem('currentLeagueId') || 'Chưa có';
@@ -743,6 +743,9 @@ document.getElementById('addHistoryBtn').addEventListener('click', () => {
 });
 
 document.getElementById('settingsForm').addEventListener('submit', (e) => {
+    // In shared edit mode, the DOMContentLoaded handler manages submit
+    if (isSharedEditMode) return;
+
     e.preventDefault();
     
     const settings = getFormSettings();
@@ -891,19 +894,66 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
     e.target.value = '';
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHARED EDIT MODE — detect ?s=<shortCode>&token=<editToken> in URL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _settingsUrlParams = new URLSearchParams(window.location.search);
+const _sharedShortCode   = _settingsUrlParams.get('s');
+const _sharedEditToken   = _settingsUrlParams.get('token');
+
+// Is this a shared edit session?
+const isSharedEditMode = !!((_sharedShortCode && _sharedEditToken));
+
+// Hash password with SHA-256 (same as app.js)
+async function hashPasswordSettings(password) {
+    const data    = new TextEncoder().encode(password);
+    const hashBuf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Fetch settings from server for shared edit mode
+async function loadSharedSettings(shortCode) {
+    const res = await fetch(`/api/settings?s=${encodeURIComponent(shortCode)}`);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Không thể tải config từ server');
+    }
+    const data = await res.json();
+    return data.settings;
+}
+
+// Save settings to server (shared edit mode)
+async function saveSettingsToServer(settings, shortCode, editToken) {
+    const res = await fetch('/api/settings', {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shortCode, settings, editToken })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Lỗi khi lưu lên server');
+    }
+    return res.json();
+}
+
 // Handle back button navigation
 function setupBackButton() {
     const backButton = document.getElementById('backButton');
     if (backButton) {
         backButton.addEventListener('click', (e) => {
             e.preventDefault();
-            const leagueId = localStorage.getItem('currentLeagueId');
-            if (leagueId) {
-                // Return to the league view
-                window.location.href = `index.html?returnToLeague=${leagueId}`;
+            if (isSharedEditMode && _sharedShortCode) {
+                // Return to shared league view
+                window.location.href = `index.html?s=${_sharedShortCode}`;
             } else {
-                // No league loaded, go to home
-                window.location.href = 'index.html';
+                const leagueId = localStorage.getItem('currentLeagueId');
+                if (leagueId) {
+                    window.location.href = `index.html?returnToLeague=${leagueId}`;
+                } else {
+                    window.location.href = 'index.html';
+                }
             }
         });
     }
@@ -927,7 +977,67 @@ async function loadDefaultSettingsFromFile(leagueId) {
 }
 
 // Initialize on page load
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     setupBackButton();
-    initializePage();
+
+    if (isSharedEditMode) {
+        // ── SHARED EDIT MODE ─────────────────────────────────────────────────
+        console.log(`[Settings] Shared edit mode: shortCode=${_sharedShortCode}`);
+
+        // Show shared edit banner
+        const banner = document.getElementById('sharedEditBanner');
+        if (banner) banner.classList.remove('hidden');
+
+        // Load settings from server
+        try {
+            const serverSettings = await loadSharedSettings(_sharedShortCode);
+            // Temporarily store in localStorage with a special key so initializePage can load it
+            localStorage.setItem(`fplSettings_shared_edit`, JSON.stringify(serverSettings));
+            localStorage.setItem('_sharedEditLeagueId', _sharedShortCode);
+            await initializePage(serverSettings);
+        } catch (err) {
+            alert('Lỗi tải config: ' + err.message + '\nToken có thể đã hết hạn. Vui lòng xác thực lại.');
+            window.location.href = `index.html?s=${_sharedShortCode}`;
+        }
+
+        // Override form submit to save to server
+        const form = document.getElementById('settingsForm');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const settings = getFormSettings();
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+
+                submitBtn.disabled    = true;
+                submitBtn.textContent = '⏳ Đang lưu lên server...';
+
+                try {
+                    // Save locally too
+                    const leagueId = localStorage.getItem('currentLeagueId');
+                    if (leagueId) saveSettings(settings, leagueId);
+
+                    // Save to server
+                    await saveSettingsToServer(settings, _sharedShortCode, _sharedEditToken);
+
+                    showSaveMessage();
+                    submitBtn.textContent = '✅ Đã lưu lên server!';
+                    setTimeout(() => {
+                        submitBtn.disabled    = false;
+                        submitBtn.textContent = originalText;
+                    }, 2500);
+                } catch (err) {
+                    alert('Lỗi lưu lên server: ' + err.message);
+                    submitBtn.disabled    = false;
+                    submitBtn.textContent = originalText;
+                }
+            }, { once: false });
+
+            // Remove existing submit listener to avoid double-fire
+            // (the original listener added at line ~745 in event listeners block)
+        }
+    } else {
+        // ── NORMAL MODE ──────────────────────────────────────────────────────
+        await initializePage();
+    }
 });

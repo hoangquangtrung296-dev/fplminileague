@@ -130,6 +130,11 @@ let currentSortDirection = 'asc';
 
 // Load settings from localStorage for specific league
 function loadSettings(leagueId = null) {
+    // In shared mode, return the server-provided settings
+    if (sharedMode && sharedMode.settings) {
+        return sharedMode.settings;
+    }
+
     // Use current league ID if not provided
     if (!leagueId) {
         leagueId = localStorage.getItem('currentLeagueId');
@@ -2294,32 +2299,294 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Check if returning from settings with a league to load
     const urlParams = new URLSearchParams(window.location.search);
     const returnToLeague = urlParams.get('returnToLeague');
-    
+    const sharedCode = urlParams.get('s');
+
     // Auto-load if entry ID exists
     const lastEntryId = localStorage.getItem('lastEntryId') || '232782';
     console.log('Last entry ID:', lastEntryId);
-    
     document.getElementById('entryId').value = lastEntryId;
-    
-    // If returning from settings, load directly to league (skip league list)
-    if (returnToLeague) {
-        // Clear URL parameter
+
+    // ── SHARED MODE: URL has ?s=<shortCode> ─────────────────────────────────
+    if (sharedCode) {
+        await initSharedMode(sharedCode);
+    } else if (returnToLeague) {
+        // Returning from settings page → load league directly
         window.history.replaceState({}, document.title, window.location.pathname);
-        
-        // Load user data but skip showing league list
         await loadUserLeagues(lastEntryId, true);
-        
-        // Load the league directly
         loadLeague(returnToLeague);
     } else {
         // Normal flow: show league list
         await loadUserLeagues(lastEntryId);
     }
+
+    // ── Share button (normal mode) ───────────────────────────────────────────
+    const shareLeagueBtn = document.getElementById('shareLeagueBtn');
+    if (shareLeagueBtn) {
+        shareLeagueBtn.addEventListener('click', () => {
+            const leagueName = localStorage.getItem('currentLeagueName') || 'League';
+            document.getElementById('shareModalLeagueName').textContent = `🏆 ${leagueName}`;
+            document.getElementById('shareStep1').classList.remove('hidden');
+            document.getElementById('shareStep2').classList.add('hidden');
+            document.getElementById('sharePassword').value = '';
+            document.getElementById('shareStep1Error').classList.add('hidden');
+            document.getElementById('shareModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('sharePassword').focus(), 100);
+        });
+    }
+
+    const closeShareModal = document.getElementById('closeShareModal');
+    if (closeShareModal) {
+        closeShareModal.addEventListener('click', () => {
+            document.getElementById('shareModal').classList.add('hidden');
+        });
+    }
+    const shareModal = document.getElementById('shareModal');
+    if (shareModal) {
+        shareModal.addEventListener('click', (e) => {
+            if (e.target === shareModal) shareModal.classList.add('hidden');
+        });
+    }
+
+    const createShareLinkBtn = document.getElementById('createShareLinkBtn');
+    if (createShareLinkBtn) {
+        createShareLinkBtn.addEventListener('click', async () => {
+            const password = document.getElementById('sharePassword').value.trim();
+            const errorEl  = document.getElementById('shareStep1Error');
+            if (!password || password.length < 4) {
+                errorEl.textContent = 'Mật khẩu phải có ít nhất 4 ký tự';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            errorEl.classList.add('hidden');
+            createShareLinkBtn.disabled    = true;
+            createShareLinkBtn.textContent = 'Đang tạo link...';
+            try {
+                const link = await createShareLink(password);
+                document.getElementById('shareLinkInput').value = link;
+                document.getElementById('shareStep1').classList.add('hidden');
+                document.getElementById('shareStep2').classList.remove('hidden');
+            } catch (err) {
+                errorEl.textContent = 'Lỗi: ' + err.message;
+                errorEl.classList.remove('hidden');
+            } finally {
+                createShareLinkBtn.disabled    = false;
+                createShareLinkBtn.textContent = 'Tạo Share Link';
+            }
+        });
+    }
+
+    const sharePasswordInput = document.getElementById('sharePassword');
+    if (sharePasswordInput) {
+        sharePasswordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('createShareLinkBtn')?.click();
+        });
+    }
+
+    const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
+    if (copyShareLinkBtn) {
+        copyShareLinkBtn.addEventListener('click', async () => {
+            const link = document.getElementById('shareLinkInput').value;
+            try {
+                await navigator.clipboard.writeText(link);
+            } catch {
+                document.getElementById('shareLinkInput').select();
+                document.execCommand('copy');
+            }
+            copyShareLinkBtn.textContent = '✅ Đã copy!';
+            setTimeout(() => { copyShareLinkBtn.textContent = '📋 Copy'; }, 2000);
+        });
+    }
+
+    // ── Edit shared config button ────────────────────────────────────────────
+    const editSharedConfigBtn = document.getElementById('editSharedConfigBtn');
+    if (editSharedConfigBtn) {
+        editSharedConfigBtn.addEventListener('click', () => {
+            document.getElementById('editPassword').value = '';
+            document.getElementById('editModalError').classList.add('hidden');
+            document.getElementById('editModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('editPassword').focus(), 100);
+        });
+    }
+
+    const closeEditModal = document.getElementById('closeEditModal');
+    if (closeEditModal) {
+        closeEditModal.addEventListener('click', () => {
+            document.getElementById('editModal').classList.add('hidden');
+        });
+    }
+    const editModal = document.getElementById('editModal');
+    if (editModal) {
+        editModal.addEventListener('click', (e) => {
+            if (e.target === editModal) editModal.classList.add('hidden');
+        });
+    }
+
+    const confirmEditBtn = document.getElementById('confirmEditBtn');
+    if (confirmEditBtn) {
+        confirmEditBtn.addEventListener('click', async () => {
+            const password = document.getElementById('editPassword').value.trim();
+            const errorEl  = document.getElementById('editModalError');
+            if (!password) {
+                errorEl.textContent = 'Vui lòng nhập mật khẩu';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            confirmEditBtn.disabled    = true;
+            confirmEditBtn.textContent = 'Đang xác thực...';
+            errorEl.classList.add('hidden');
+            try {
+                const editToken = await verifyEditPassword(sharedMode.shortCode, password);
+                window.location.href = `settings.html?s=${sharedMode.shortCode}&token=${editToken}`;
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('hidden');
+                confirmEditBtn.disabled    = false;
+                confirmEditBtn.textContent = 'Xác nhận';
+            }
+        });
+    }
+
+    const editPasswordInput = document.getElementById('editPassword');
+    if (editPasswordInput) {
+        editPasswordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('confirmEditBtn')?.click();
+        });
+    }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHARE FEATURE — Helper functions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Global shared mode state
+let sharedMode = null; // { shortCode, leagueId, leagueName, settings }
+
+// Hash password with SHA-256 (Web Crypto API — built-in browser)
+async function hashPassword(password) {
+    const data      = new TextEncoder().encode(password);
+    const hashBuf   = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuf));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Upload current league settings to server → return share link URL
+async function createShareLink(password) {
+    const leagueId = currentLeagueId || localStorage.getItem('currentLeagueId');
+    if (!leagueId) throw new Error('Chưa chọn league nào');
+
+    const settings      = loadSettings(leagueId);
+    const leagueName    = localStorage.getItem('currentLeagueName') || '';
+    const passwordHash  = await hashPassword(password);
+
+    const res = await fetch('/api/settings', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            leagueId,
+            entryId:   currentEntryId || localStorage.getItem('lastEntryId') || '',
+            leagueName,
+            settings,
+            passwordHash
+        })
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Lỗi khi tạo share link');
+    }
+
+    const { shortCode } = await res.json();
+    const base = window.location.origin + window.location.pathname.replace(/\/$/, '');
+    return `${base}?s=${shortCode}`;
+}
+
+// Verify password → receive one-time editToken (30 min)
+async function verifyEditPassword(shortCode, password) {
+    const passwordHash = await hashPassword(password);
+    const res = await fetch('/api/settings?action=verify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shortCode, passwordHash })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Lỗi xác thực mật khẩu');
+    return data.editToken;
+}
+
+// Fetch shared config from server
+async function loadSharedConfig(shortCode) {
+    const res = await fetch(`/api/settings?s=${encodeURIComponent(shortCode)}`);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Không thể tải config');
+    }
+    return res.json();
+}
+
+// Initialize shared mode: fetch config from server, auto-load league
+async function initSharedMode(shortCode) {
+    try {
+        showLoading('Đang tải config được chia sẻ...');
+
+        const config = await loadSharedConfig(shortCode);
+
+        sharedMode = {
+            shortCode,
+            leagueId:   config.leagueId,
+            leagueName: config.leagueName,
+            settings:   config.settings
+        };
+
+        // Show shared banner
+        const banner     = document.getElementById('sharedModeBanner');
+        const bannerText = document.getElementById('sharedBannerText');
+        if (banner && bannerText) {
+            bannerText.innerHTML = `Đang xem <strong>"${config.leagueName}"</strong> với config được chia sẻ`;
+            banner.classList.remove('hidden');
+        }
+
+        // In shared mode, no entryId needed — hide entry input
+        hideElement('entryInputSection');
+        hideElement('userInfo');
+
+        // Load league trực tiếp
+        await loadLeague(config.leagueId);
+
+        // Restore ?s= URL (loadLeague changes the hash)
+        window.history.replaceState({view: 'shared', shortCode}, '', `?s=${shortCode}`);
+
+        // Update UI buttons for shared mode
+        updateSharedModeUI();
+
+    } catch (err) {
+        hideLoading();
+        showError('Không thể tải config được chia sẻ: ' + err.message);
+    }
+}
+
+// Toggle correct buttons based on shared vs normal mode
+function updateSharedModeUI() {
+    const shareBtn      = document.getElementById('shareLeagueBtn');
+    const editBtn       = document.getElementById('editSharedConfigBtn');
+    const settingsLink  = document.querySelector('.league-actions a[href="settings.html"]');
+    const showLeaguesBtn = document.getElementById('showLeagues');
+
+    if (sharedMode) {
+        if (shareBtn)      shareBtn.classList.add('hidden');
+        if (settingsLink)  settingsLink.classList.add('hidden');
+        if (editBtn)       editBtn.classList.remove('hidden');
+        if (showLeaguesBtn) showLeaguesBtn.style.display = 'none';
+    } else {
+        if (shareBtn)      shareBtn.classList.remove('hidden');
+        if (settingsLink)  settingsLink.classList.remove('hidden');
+        if (editBtn)       editBtn.classList.add('hidden');
+        if (showLeaguesBtn) showLeaguesBtn.style.display = '';
+    }
+}
+
 // Handle browser back button
-window.addEventListener('popstate', (event) => {
-    // When user presses back button, return to league list
+window.addEventListener('popstate', () => {
+    if (sharedMode) return; // Shared mode: không trở về league list
     if (userLeagues && userLeagues.length > 0) {
         displayLeagueList(userLeagues);
     }
