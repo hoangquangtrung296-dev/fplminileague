@@ -1,6 +1,6 @@
 /**
  * Vercel API handler for FPL proxy
- * Handles all /api/fpl/* requests
+ * Usage: /api/fpl?endpoint=/entry/232782 or /api/fpl?path=entry/232782
  */
 module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -18,18 +18,10 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // For /api/fpl endpoint, we need to check how Vercel passes the rest of the path
-    // When accessing /api/fpl/entry/123/, Vercel sends it as:
-    // req.url might be: /api/fpl/entry/123/ or just /api/fpl
-    // We need to parse the actual path from the URL
+    // Get FPL endpoint from query parameter
+    let fplPath = req.query.endpoint || req.query.path || '';
     
-    const url = new URL(req.url, 'https://example.com');
-    const pathname = url.pathname;
-    
-    // Extract everything after /api/fpl
-    // If pathname is /api/fpl, then fplPath = /
-    // If pathname is /api/fpl/entry/123/, then fplPath = /entry/123/
-    let fplPath = pathname.replace(/^\/api\/fpl(?:\/|$)/, '');
+    // Add leading slash if needed
     if (fplPath && !fplPath.startsWith('/')) {
       fplPath = '/' + fplPath;
     }
@@ -37,10 +29,22 @@ module.exports = async function handler(req, res) {
       fplPath = '/';
     }
 
-    const queryString = url.search || '';
+    // Handle additional query params (like page_standings)
+    const queryParams = new URLSearchParams();
+    Object.keys(req.query).forEach(key => {
+      if (key !== 'endpoint' && key !== 'path') {
+        if (Array.isArray(req.query[key])) {
+          req.query[key].forEach(v => queryParams.append(key, v));
+        } else {
+          queryParams.append(key, req.query[key]);
+        }
+      }
+    });
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    
     const upstreamUrl = `https://fantasy.premierleague.com/api${fplPath}${queryString}`;
 
-    console.log(`[FPL Proxy] Handler /api/fpl.js - Path: ${fplPath}, URL: ${upstreamUrl}`);
+    console.log(`[FPL Proxy] /api/fpl - Endpoint: ${fplPath}, Full URL: ${upstreamUrl}`);
 
     const upstreamResponse = await fetch(upstreamUrl, {
       method: 'GET',
@@ -60,7 +64,7 @@ module.exports = async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.status(upstreamResponse.status).send(body);
 
-    console.log(`[FPL Proxy] Response: ${upstreamResponse.status}`);
+    console.log(`[FPL Proxy] Status: ${upstreamResponse.status}`);
   } catch (error) {
     console.error('[FPL Proxy] Error:', error.message);
     res.setHeader('Access-Control-Allow-Origin', '*');

@@ -24,15 +24,17 @@ if (window.FORCE_LOCAL_MODE === true) {
 }
 
 // Configure proxies based on environment.
-// NOTE: /api/fpl proxy on Vercel serverless doesn't work reliably, so we skip it
-// and rely on public CORS proxies instead
+// NOTE: /api/fpl proxy on Vercel serverless uses query parameter for path
+// Usage: /api/fpl?endpoint=/entry/232782
 const CORS_PROXIES = isLocalFile ? [
     { url: 'https://cors.eu.org/', needsEncode: false },
     { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
     { url: 'https://corsproxy.io/?', needsEncode: false }
 ] : [
-    // Skip SERVER_PROXY_BASE on Vercel - it doesn't work reliably
+    // Use Vercel proxy with query parameter
+    { url: SERVER_PROXY_BASE, needsEncode: false, useQueryParam: true },
+    // Skip CORS proxies on Vercel - they don't work
     { url: 'https://cors.eu.org/', needsEncode: false },
     { url: 'https://api.allorigins.win/raw?url=', needsEncode: true },
     { url: 'https://api.codetabs.com/v1/proxy?quest=', needsEncode: false },
@@ -59,7 +61,12 @@ async function fetchWithProxy(endpoint, tryProxies = true) {
             } else if (proxyConfig.needsEncode) {
                 url = `${proxy}${encodeURIComponent(fullUrl)}`;
             } else if (proxy === SERVER_PROXY_BASE) {
-                url = `${SERVER_PROXY_BASE}${endpoint}`;
+                // Use query parameter for Vercel proxy
+                if (proxyConfig.useQueryParam) {
+                    url = `${SERVER_PROXY_BASE}?endpoint=${encodeURIComponent(endpoint)}`;
+                } else {
+                    url = `${SERVER_PROXY_BASE}${endpoint}`;
+                }
             } else {
                 url = `${proxy}${fullUrl}`;
             }
